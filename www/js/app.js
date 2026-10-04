@@ -2,6 +2,7 @@ import { CALENDARS, today, dayFromISO, isoFromDay, weekday } from './calendars.j
 import { FREQUENCIES, status, lumpSum, firstFromStart, firstFromRemaining } from './schedule.js';
 import { LANGS, makeI18n, currencies, parseNumber, guessDefaults } from './i18n.js';
 import { load, save, exportFile, parseImport } from './store.js';
+import { initPwa, isBrowser, standalone, iosManualInstall, canPromptInstall, promptInstall, requestPersistentStorage } from './pwa.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -12,6 +13,7 @@ let doc;          // persisted document
 let I;            // i18n for current prefs
 let todayN;       // today's day number, refreshed on every render
 let draft = null; // commitment being edited
+let pwa;           // browser-only update/install hooks
 
 // --- boot -----------------------------------------------------------------------
 
@@ -37,8 +39,16 @@ async function init() {
   document.fonts?.ready.then(fitTotals); // first fit may have measured the fallback font
   document.addEventListener('visibilitychange', () => { if (!document.hidden && today() !== todayN) render(); });
 
+  pwa = initPwa({
+    isBusy: () => !!document.querySelector('dialog[open]'),
+    installChanged: () => { if ($('settings').open) renderSettings(); },
+  });
+
   // Android back closes the open sheet: each sheet pushes a history entry.
-  window.addEventListener('popstate', () => document.querySelectorAll('dialog[open]').forEach(d => d.close()));
+  window.addEventListener('popstate', () => {
+    document.querySelectorAll('dialog[open]').forEach(d => d.close());
+    pwa.settle(); // a pending update may have been waiting for the sheet to close
+  });
   for (const d of document.querySelectorAll('dialog')) {
     d.addEventListener('cancel', e => { e.preventDefault(); closeSheet(); });
     d.addEventListener('click', e => { if (e.target === d) closeSheet(); }); // backdrop tap
@@ -55,6 +65,7 @@ function applyPrefs() {
 
 function persist() {
   save(doc).catch(e => console.error('save failed', e));
+  requestPersistentStorage();
 }
 
 function openSheet(dialog) {
@@ -267,7 +278,7 @@ function renderEditor(errors = {}) {
       ${field('currency', t.currency, `<select name="currency">${currencyOptions(d.currency, true)}</select>`)}
     </div>
     ${field('frequency', t.frequency, seg('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency))}
-    ${field('calendar', t.calendar, seg('calendar', CAL_ORDER.map(c => [c, t.cal[c]]), d.calendar))}
+    ${field('calendar', t.calendar, seg('calendar', CAL_ORDER.map(c => [c, t.cal[c]]), d.calendar), d.calendar === 'hijri' ? t.hijriHint : '')}
     ${payDay}
     <div class="split">
       ${field('total', t.total, text('total', n(d.total), 'num', 'numeric'))}
@@ -406,13 +417,18 @@ function renderSettings() {
     ${field('currency', t.defaultCurrency, `<select name="currency">${currencyOptions(doc.prefs.currency, false)}</select>`)}
     <div class="group">
       <h2 style="font-size:16px;margin-top:14px">${t.backup}</h2>
-      <p class="hint">${t.backupHint}</p>
+      <p class="hint">${isBrowser ? t.backupHintWeb : t.backupHint}</p>
       <div class="actions" style="margin-top:8px">
         <button type="button" class="primary" data-act="export">${t.exportBtn}</button>
         <button type="button" class="secondary" data-act="import">${t.importBtn}</button>
       </div>
     </div>
-    <p class="about">${t.about}</p>
+    ${isBrowser && !standalone && (canPromptInstall() || iosManualInstall) ? `<div class="group">
+      <h2 style="font-size:16px;margin-top:14px">${t.installTitle}</h2>
+      <p class="hint">${canPromptInstall() ? t.installHint : t.installIos}</p>
+      ${canPromptInstall() ? `<button type="button" class="primary wide" data-act="install">${t.installBtn}</button>` : ''}
+    </div>` : ''}
+    <p class="about">${isBrowser ? t.aboutWeb : t.about}</p>
   </div>`;
 }
 
@@ -439,6 +455,7 @@ $('settingsBody').addEventListener('click', async e => {
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'close') closeSheet();
   if (act === 'import') $('importFile').click();
+  if (act === 'install') promptInstall();
   if (act === 'export') {
     try {
       await exportFile(doc, isoFromDay(today()));

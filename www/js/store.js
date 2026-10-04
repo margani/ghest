@@ -44,6 +44,12 @@ export async function exportFile(doc, todayISO) {
     await Share.share({ title: name, files: [uri] });
     return;
   }
+  // Mobile browsers: hand the file to the share sheet, like the Android app does.
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file], title: name });
+    return;
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
   a.download = name;
