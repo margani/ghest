@@ -1,0 +1,9 @@
+{
+  "appId": "dev.margani.ghest",
+  "appName": "Ghest",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": false
+  }
+}

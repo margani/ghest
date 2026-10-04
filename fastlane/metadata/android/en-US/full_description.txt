@@ -1,0 +1,25 @@
+Ghest tracks fixed recurring payments with a known end — loans, car finance, tuition, a phone on instalments — and shows where you are in each one and when the money frees up.
+
+<b>For each commitment</b>
+<ul>
+<li>Payments made and left, as a progress grid</li>
+<li>Principal and interest still to pay</li>
+<li>Last payment made, next payment, final payment</li>
+</ul>
+
+<b>Across everything</b>
+<ul>
+<li>Total left to repay and what you pay per month, normalised across daily, weekly, monthly and yearly payments</li>
+<li>The date everything ends</li>
+<li>A lump-sum calculator: how much interest an extra payment saves on each loan and how many months it cuts, with the best option highlighted</li>
+</ul>
+
+<b>Details that matter</b>
+<ul>
+<li>Persian and English, right-to-left and left-to-right</li>
+<li>Solar Hijri, Gregorian and Lunar Hijri calendars, both for payment days and for display. A payment on the 31st lands on the last day of shorter months.</li>
+<li>Any currency, including toman, and a different currency per commitment if you need it</li>
+</ul>
+
+<b>Private by design</b>
+The app has no internet permission. No accounts, no analytics, no crash reporting. Your data stays on your phone; export it to a JSON file whenever you like and import it on another device.

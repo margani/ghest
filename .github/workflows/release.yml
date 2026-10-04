@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Tag must match versionName
+        run: |
+          name=$(sed -n 's/^ *versionName "\(.*\)"/\1/p' android/app/build.gradle)
+          [ "v$name" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != versionName $name"; exit 1; }
+      - run: npm ci
+      - run: npm test
+      - name: Build signed release
+        env:
+          GHEST_KEYSTORE_B64: ${{ secrets.GHEST_KEYSTORE_B64 }}
+          GHEST_KEYSTORE_PASSWORD: ${{ secrets.GHEST_KEYSTORE_PASSWORD }}
+          GHEST_KEY_ALIAS: ${{ secrets.GHEST_KEY_ALIAS }}
+          GHEST_KEY_PASSWORD: ${{ secrets.GHEST_KEY_PASSWORD }}
+        run: |
+          [ -n "$GHEST_KEYSTORE_B64" ] || { echo "GHEST_KEYSTORE_B64 secret is not set"; exit 1; }
+          echo "$GHEST_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export GHEST_KEYSTORE="$RUNNER_TEMP/release.jks"
+          npm run apk:release
+          rm -f "$RUNNER_TEMP/release.jks"
+      - run: ./scripts/check-apk.sh android/app/build/outputs/apk/release/app-release.apk
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          out="ghest-${GITHUB_REF_NAME#v}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$out"
+          sha256sum "$out" > "$out.sha256"
+          notes=fastlane/metadata/android/en-US/changelogs/$(sed -n 's/^ *versionCode \([0-9]*\)/\1/p' android/app/build.gradle).txt
+          gh release create "$GITHUB_REF_NAME" "$out" "$out.sha256" --title "$GITHUB_REF_NAME" --notes-file "$notes"

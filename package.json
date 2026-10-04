@@ -1,0 +1,27 @@
+{
+  "name": "ghest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline tracker for fixed recurring payments",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "vendor": "cp node_modules/@capacitor/core/dist/index.js www/js/vendor/capacitor-core.js && cp node_modules/jalaali-js/dist/index.js www/js/vendor/jalaali.js && sed -i '/sourceMappingURL/d' www/js/vendor/*.js",
+    "test": "node --test test/",
+    "sync": "npm run vendor && cap sync android",
+    "apk": "npm run sync && cd android && ./gradlew assembleDebug",
+    "apk:release": "npm run sync && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "jalaali-js": "^2.0.1",
+    "vazirmatn": "^33.0.3"
+  }
+}
