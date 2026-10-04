@@ -4,6 +4,10 @@
   "webDir": "www",
   "android": {
     "allowMixedContent": false,
-    "captureInput": false
+    "captureInput": false,
+    "minWebViewVersion": 99
+  },
+  "server": {
+    "errorPath": "webview-update.html"
   }
 }

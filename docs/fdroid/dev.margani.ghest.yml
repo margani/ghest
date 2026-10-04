@@ -1,4 +1,7 @@
-# Draft recipe for fdroiddata (metadata/dev.margani.ghest.yml). Not yet verified with `fdroid build`.
+# Draft recipe for fdroiddata (metadata/dev.margani.ghest.yml).
+# `fdroid lint` and `fdroid scanner` pass; not yet run through a full `fdroid build`.
+# Capacitor 8's CLI needs Node >= 22, newer than Debian trixie's nodejs, hence the pinned download.
+
 Categories:
   - Finance Manager
 License: GPL-3.0-only
@@ -18,7 +21,13 @@ Builds:
     subdir: android/app
     sudo:
       - apt-get update
-      - apt-get install -y nodejs npm
+      - apt-get install -y curl xz-utils
+      - curl -fsSLo /tmp/node.tar.xz https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz
+      - echo 'df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de  /tmp/node.tar.xz'
+        | sha256sum -c -
+      - tar xJf /tmp/node.tar.xz -C /opt
+      - ln -s /opt/node-v22.23.3-linux-x64/bin/node /opt/node-v22.23.3-linux-x64/bin/npm
+        /opt/node-v22.23.3-linux-x64/bin/npx /usr/local/bin/
     init: cd ../.. && npm ci --ignore-scripts
     gradle:
       - yes
