@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "vendor": "cp node_modules/@capacitor/core/dist/index.js www/js/vendor/capacitor-core.js && cp node_modules/jalaali-js/dist/index.js www/js/vendor/jalaali.js && sed -i '/sourceMappingURL/d' www/js/vendor/*.js",
-    "test": "node --test test/",
+    "test": "node --test test/*.test.js",
     "sync": "npm run vendor && cap sync android",
     "apk": "npm run sync && cd android && ./gradlew assembleDebug",
     "apk:release": "npm run sync && cd android && ./gradlew assembleRelease"
