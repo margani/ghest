@@ -1,6 +1,6 @@
 # Draft recipe for fdroiddata (metadata/dev.margani.ghest.yml). Not yet verified with `fdroid build`.
 Categories:
-  - Money
+  - Finance Manager
 License: GPL-3.0-only
 SourceCode: https://github.com/margani/ghest
 IssueTracker: https://github.com/margani/ghest/issues
