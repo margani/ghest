@@ -8,6 +8,12 @@ An offline app for fixed recurring payments (loans, car finance, tuition, mahr) 
 - A lump-sum calculator shows how much interest an extra payment saves on each commitment and how many months it cuts.
 - **Android:** no internet permission. **Both versions:** no analytics, no crash reporting, no remote fonts, and your data never leaves the device.
 
+## Install
+
+- **Web (PWA):** https://ghest.whosane.workers.dev. Open it, then Settings → Install (Chrome, Edge) or Share → Add to Home Screen (Safari).
+- **Android:** download the APK from [the latest release](https://github.com/margani/ghest/releases/latest). To get updates automatically, add `https://github.com/margani/ghest` to [Obtainium](https://github.com/ImranR98/Obtainium).
+- **F-Droid:** coming.
+
 ## What it computes
 
 Each commitment has an amount per payment, a frequency (daily, weekly, monthly or yearly), a payment day, a total number of payments, and an optional APR.
