@@ -48,6 +48,12 @@ android {
     }
 }
 
+// Reproducible builds (F-Droid compares its build with the GitHub release APK byte for byte):
+// ART baseline profiles can differ between machines, so they are not generated.
+tasks.configureEach { task ->
+    if (task.name.contains('ArtProfile')) task.enabled = false
+}
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
