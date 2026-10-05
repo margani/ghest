@@ -1,10 +1,12 @@
 # Draft recipe for fdroiddata (metadata/dev.margani.ghest.yml).
-# `fdroid lint` and `fdroid scanner` pass; not yet run through a full `fdroid build`.
+# `fdroid lint` and `fdroid scanner` pass. Reproducible: a local build of the tag matches
+# the signed GitHub release (apksigcopier compare), so Binaries/AllowedAPKSigningKeys are set.
 # Capacitor 8's CLI needs Node >= 22, newer than Debian trixie's nodejs, hence the pinned download.
 
 Categories:
   - Finance Manager
 License: GPL-3.0-only
+AuthorName: margani
 SourceCode: https://github.com/margani/ghest
 IssueTracker: https://github.com/margani/ghest/issues
 Changelog: https://github.com/margani/ghest/releases
@@ -13,11 +15,12 @@ AutoName: Ghest
 
 RepoType: git
 Repo: https://github.com/margani/ghest.git
+Binaries: https://github.com/margani/ghest/releases/download/v%v/ghest-%v.apk
 
 Builds:
-  - versionName: 1.0.2
-    versionCode: 3
-    commit: v1.0.2
+  - versionName: 1.0.3
+    versionCode: 4
+    commit: fdafbddad330c9a47c5f200eb88497c3d0b1406b
     subdir: android/app
     sudo:
       - apt-get update
@@ -35,7 +38,9 @@ Builds:
     scanignore:
       - node_modules
 
+AllowedAPKSigningKeys: 6c52a1c4c46fe3767cd3f09b89749d91602527d23f19c941d936677ed6cef5f0
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.0.2
-CurrentVersionCode: 3
+CurrentVersion: 1.0.3
+CurrentVersionCode: 4
