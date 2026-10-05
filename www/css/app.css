@@ -75,6 +75,20 @@ h1 { font-size: 15px; font-weight: 500; color: var(--muted); margin: 4px 0 2px }
 .last { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--muted) }
 .last b { color: var(--ink); font-weight: 700 }
 
+/* home: one compact row per commitment */
+.loan-row { display: block; inline-size: 100%; text-align: start; margin-bottom: 10px; padding: 14px 16px; cursor: pointer; font: inherit; color: inherit }
+.loan-row.hot { border-color: var(--hot) }
+.loan-row.done { opacity: .62 }
+.lr-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px }
+.lr-amt { font-weight: 700; font-size: 16px; white-space: nowrap }
+.mini { display: block; height: 6px; border-radius: 3px; background: var(--left); margin: 10px 0 8px; overflow: hidden }
+.mini i { display: block; height: 100%; background: var(--paid) }
+.lr-meta { display: block; font-size: 13.5px; color: var(--muted) }
+#lumpBtn { margin-top: 10px }
+/* details sheet */
+#detailsBody .rate { margin: 0 0 4px }
+#detailsBody .rate.hot { color: var(--hot); font-weight: 700 }
+
 /* buttons */
 button.primary, button.secondary, button.danger {
   font-weight: 700; padding: 12px 16px; border-radius: 12px; cursor: pointer; min-height: 48px;

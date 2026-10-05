@@ -13,6 +13,7 @@ let doc;          // persisted document
 let I;            // i18n for current prefs
 let todayN;       // today's day number, refreshed on every render
 let draft = null; // commitment being edited
+let detailId = null; // commitment shown in the details sheet
 
 // --- boot -----------------------------------------------------------------------
 
@@ -24,13 +25,16 @@ async function init() {
   $('addBtn').onclick = () => openEditor(null);
   $('settingsBtn').onclick = openSettings;
   $('list').onclick = e => {
-    const card = e.target.closest('[data-id]');
-    if (card) openEditor(card.dataset.id);
+    const row = e.target.closest('[data-id]');
+    if (row) openDetails(row.dataset.id);
   };
-  $('list').onkeydown = e => {
-    const card = e.target.closest('[data-id]');
-    if (card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openEditor(card.dataset.id); }
+  $('detailsBody').onclick = e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'close') closeSheet();
+    if (act === 'edit') openEditor(detailId, true);
   };
+  $('lumpBtn').onclick = () => { openSheet($('lumpSheet')); $('lumpAmount').focus(); };
+  $('lumpClose').onclick = closeSheet;
   $('lumpAmount').oninput = renderLump;
   $('lumpCurrency').onchange = renderLump;
   $('importFile').onchange = onImport;
@@ -65,10 +69,13 @@ function persist() {
   requestPersistentStorage();
 }
 
-function openSheet(dialog) {
+/** Open a sheet. `replace` swaps it for the one already open (details → editor) under one history entry. */
+function openSheet(dialog, replace = false) {
+  if (replace) document.querySelectorAll('dialog[open]').forEach(d => d.close());
   dialog.showModal();
   dialog.scrollTop = 0;
-  history.pushState({ sheet: dialog.id }, '');
+  if (replace) history.replaceState({ sheet: dialog.id }, '');
+  else history.pushState({ sheet: dialog.id }, '');
 }
 
 function closeSheet() {
@@ -86,6 +93,8 @@ function render() {
   $('updateBtn').textContent = t.updateBtn;
   $('foot').textContent = doc.commitments.length ? t.foot : '';
   $('lumpTitle').textContent = t.lumpTitle;
+  $('lumpBtn').textContent = t.lumpTitle;
+  $('lumpClose').setAttribute('aria-label', t.close);
   $('lumpHint').textContent = t.lumpHint;
   $('lumpLabel').textContent = t.lumpLabel;
 
@@ -97,7 +106,9 @@ function render() {
   fitTotals();
   const priced = rows.filter(r => !r.s.done && r.c.apr);
   const maxApr = priced.length > 1 ? Math.max(...priced.map(r => r.c.apr)) : null;
-  $('list').innerHTML = rows.map(r => renderCard(r, r.c.apr === maxApr && !r.s.done)).join('');
+  hottest = maxApr;
+  $('list').innerHTML = rows.map(r => renderRow(r, r.c.apr === maxApr && !r.s.done)).join('');
+  if ($('details').open) renderDetails(); // e.g. the date rolled over while it was open
   renderLump();
 }
 
@@ -151,7 +162,34 @@ function tickColumns(n) {
   return n <= 12 ? n : n <= 40 ? 12 : n <= 50 ? 13 : n <= 60 ? 15 : 20;
 }
 
-function renderCard({ c, cur, s }, hot) {
+let hottest = null; // highest APR among active commitments, when more than one has interest
+
+/** One compact row on the home screen: what matters at a glance. */
+function renderRow({ c, cur, s }, hot) {
+  const { t, num, money, monthYear } = I;
+  const meta = s.done ? t.finishedOn(monthYear(s.end)) : t.leftEnds(num(s.remaining), num(c.total), monthYear(s.end));
+  return `<button type="button" class="card loan-row${hot ? ' hot' : ''}${s.done ? ' done' : ''}" data-id="${esc(c.id)}">
+    <span class="lr-top"><span class="name">${esc(c.name)}</span><span class="lr-amt">${s.done ? '' : money(s.principal, cur)}</span></span>
+    <span class="mini" aria-hidden="true"><i style="inline-size:${(100 * s.paid) / c.total}%"></i></span>
+    <span class="lr-meta">${esc(meta)}</span>
+  </button>`;
+}
+
+function openDetails(id) {
+  detailId = id;
+  renderDetails();
+  openSheet($('details'));
+}
+
+function renderDetails() {
+  const c = doc.commitments.find(x => x.id === detailId);
+  if (!c) return;
+  const r = { c, cur: c.currency || doc.prefs.currency, s: status(c, todayN) };
+  $('detailsBody').innerHTML = renderDetail(r, c.apr === hottest && !r.s.done);
+}
+
+/** Everything about one commitment, shown in the details sheet. */
+function renderDetail({ c, cur, s }, hot) {
   const { t, num, money, date, monthYear } = I;
   const progress = c.total <= 120
     ? `<div class="ticks" style="grid-template-columns:repeat(${tickColumns(c.total)},1fr)">${
@@ -159,10 +197,11 @@ function renderCard({ c, cur, s }, hot) {
     : `<div class="bar"><i style="inline-size:${(100 * s.paid) / c.total}%"></i></div>`;
   const rate = c.apr ? t.apr(num(c.apr, 2)) + (hot ? t.hottest : '') : t.noInterest;
 
-  return `<article class="card loan${hot ? ' hot' : ''}${s.done ? ' done' : ''}" data-id="${esc(c.id)}" role="button" tabindex="0"
-      aria-label="${esc(c.name)}, ${esc(t.progressLabel(num(s.paid), num(c.total)))}">
-    <div class="row"><span class="name">${esc(c.name)}</span><span class="rate">${rate}</span></div>
-    ${progress}
+  return `<div class="sheet" tabindex="-1" autofocus>
+    <header><h2>${esc(c.name)}</h2>
+      <button type="button" class="icon" data-act="close" aria-label="${t.close}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <p class="rate${hot ? ' hot' : ''}">${rate}</p>
+    <div role="img" aria-label="${esc(t.progressLabel(num(s.paid), num(c.total)))}">${progress}</div>
     <div class="nums">
       <div><b>${t.of(num(s.remaining), num(c.total))}</b>${t.paymentsLeft}</div>
       <div><b>${money(s.principal, cur, true)}</b>${c.apr ? t.principalLeft : t.amountLeft}</div>
@@ -174,13 +213,14 @@ function renderCard({ c, cur, s }, hot) {
       <div><b>${monthYear(s.end)}</b>${t.end}</div>
     </div>
     <div class="last">${t.lastPaid}: <b>${s.lastPaid != null ? date(s.lastPaid) : t.nonePaid}</b></div>
-  </article>`;
+    <div class="actions"><button type="button" class="primary" data-act="edit">${t.edit}</button></div>
+  </div>`;
 }
 
 function renderLump() {
   const { t, money } = I;
   const eligible = doc.commitments.filter(c => c.apr && !status(c, todayN).done);
-  $('lump').hidden = !eligible.length;
+  $('lumpBtn').hidden = !eligible.length;
   if (!eligible.length) return;
 
   const curs = currencyOrder(new Set(eligible.map(c => c.currency || doc.prefs.currency)));
@@ -229,7 +269,7 @@ function currencyOptions(selected, withDefault) {
     + top.map(opt).join('') + '<option disabled>──────</option>' + rest.map(opt).join('');
 }
 
-function openEditor(id) {
+function openEditor(id, fromDetails = false) {
   const c = id && doc.commitments.find(x => x.id === id);
   const cal = c ? c.calendar : doc.prefs.displayCalendar;
   const p = CALENDARS[cal].toParts(todayN);
@@ -243,7 +283,7 @@ function openEditor(id) {
   draft.md = draft.frequency === 'monthly' ? draft.payDay : p.d;
   draft.yd = draft.frequency === 'yearly' ? draft.payDay : { m: p.m, d: p.d };
   renderEditor();
-  openSheet($('editor'));
+  openSheet($('editor'), fromDetails);
   if (!c) $('editForm').elements.name.focus();
 }
 

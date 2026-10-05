@@ -26,19 +26,8 @@
   <section id="summary"></section>
   <div id="list"></div>
   <button type="button" class="primary wide" id="addBtn"></button>
+  <button type="button" class="secondary wide" id="lumpBtn" hidden></button>
 
-  <section id="lump" hidden>
-    <h2 id="lumpTitle"></h2>
-    <p class="hint" id="lumpHint"></p>
-    <div class="card">
-      <label for="lumpAmount" id="lumpLabel"></label>
-      <div class="lumpRow">
-        <input id="lumpAmount" class="big" type="text" inputmode="decimal" autocomplete="off">
-        <select id="lumpCurrency" hidden></select>
-      </div>
-      <div id="lumpRes"></div>
-    </div>
-  </section>
 
   <p class="foot" id="foot"></p>
 </main>
@@ -47,6 +36,20 @@
 <button type="button" class="update" id="updateBtn" hidden aria-live="polite"></button>
 
 <dialog id="editor"><form id="editForm" novalidate></form></dialog>
+<dialog id="details"><div id="detailsBody"></div></dialog>
+<dialog id="lumpSheet">
+  <div class="sheet" tabindex="-1">
+    <header><h2 id="lumpTitle"></h2>
+      <button type="button" class="icon" id="lumpClose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <p class="hint" id="lumpHint"></p>
+    <label for="lumpAmount" id="lumpLabel"></label>
+    <div class="lumpRow">
+      <input id="lumpAmount" class="big" type="text" inputmode="decimal" autocomplete="off">
+      <select id="lumpCurrency" hidden></select>
+    </div>
+    <div id="lumpRes"></div>
+  </div>
+</dialog>
 <dialog id="settings"><div id="settingsBody"></div></dialog>
 <input type="file" id="importFile" hidden>
 </body>
