@@ -1,0 +1,5 @@
+- Home screen is a short list; tap a commitment for its full details.
+- Lump-sum calculator opens in its own sheet.
+- Payment day, start day and year are picked from lists instead of typed.
+- Save stays visible at the bottom of the editor.
+- Form fields line up when labels wrap; dialogs are centred on wide screens.
