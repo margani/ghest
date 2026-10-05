@@ -2,7 +2,7 @@ import { CALENDARS, today, dayFromISO, isoFromDay, weekday } from './calendars.j
 import { FREQUENCIES, status, lumpSum, firstFromStart, firstFromRemaining } from './schedule.js';
 import { LANGS, makeI18n, currencies, parseNumber, guessDefaults } from './i18n.js';
 import { load, save, exportFile, parseImport } from './store.js';
-import { initPwa, isBrowser, standalone, iosManualInstall, canPromptInstall, promptInstall, requestPersistentStorage } from './pwa.js';
+import { initPwa, applyUpdate, isBrowser, standalone, iosManualInstall, canPromptInstall, promptInstall, requestPersistentStorage } from './pwa.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -13,7 +13,6 @@ let doc;          // persisted document
 let I;            // i18n for current prefs
 let todayN;       // today's day number, refreshed on every render
 let draft = null; // commitment being edited
-let pwa;           // browser-only update/install hooks
 
 // --- boot -----------------------------------------------------------------------
 
@@ -39,16 +38,14 @@ async function init() {
   document.fonts?.ready.then(fitTotals); // first fit may have measured the fallback font
   document.addEventListener('visibilitychange', () => { if (!document.hidden && today() !== todayN) render(); });
 
-  pwa = initPwa({
-    isBusy: () => !!document.querySelector('dialog[open]'),
+  initPwa({
+    updateReady: () => { $('updateBtn').hidden = false; },
     installChanged: () => { if ($('settings').open) renderSettings(); },
   });
+  $('updateBtn').onclick = applyUpdate;
 
   // Android back closes the open sheet: each sheet pushes a history entry.
-  window.addEventListener('popstate', () => {
-    document.querySelectorAll('dialog[open]').forEach(d => d.close());
-    pwa.settle(); // a pending update may have been waiting for the sheet to close
-  });
+  window.addEventListener('popstate', () => document.querySelectorAll('dialog[open]').forEach(d => d.close()));
   for (const d of document.querySelectorAll('dialog')) {
     d.addEventListener('cancel', e => { e.preventDefault(); closeSheet(); });
     d.addEventListener('click', e => { if (e.target === d) closeSheet(); }); // backdrop tap
@@ -86,6 +83,7 @@ function render() {
   $('brand').textContent = t.app;
   $('settingsBtn').setAttribute('aria-label', t.settings);
   $('addBtn').textContent = t.add;
+  $('updateBtn').textContent = t.updateBtn;
   $('foot').textContent = doc.commitments.length ? t.foot : '';
   $('lumpTitle').textContent = t.lumpTitle;
   $('lumpHint').textContent = t.lumpHint;

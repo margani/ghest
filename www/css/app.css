@@ -107,6 +107,21 @@ input.num { direction: ltr; text-align: end }
 .opt small { display: block; color: var(--muted); font-size: 13px }
 .foot { color: var(--muted); font-size: 12.5px; margin-top: 22px }
 
+/* update prompt: a pill in the bottom inline-end corner, above the safe area */
+button.update {
+  position: fixed; z-index: 10; inset-inline-end: 16px;
+  inset-block-end: calc(16px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 18px;
+  border: 0; border-radius: 999px; background: var(--ink); color: var(--bg);
+  font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 8px 24px rgb(0 0 0 / .25);
+}
+button.update::before { content: '↻'; font-size: 18px; line-height: 1 }
+button.update[hidden] { display: none }
+@media (prefers-reduced-motion: no-preference) {
+  button.update:not([hidden]) { animation: rise .25s ease-out }
+  @keyframes rise { from { transform: translateY(12px); opacity: 0 } }
+}
+
 /* dialogs as bottom sheets */
 dialog {
   border: 0; padding: 0; margin: auto auto 0; inline-size: 100%; max-inline-size: 560px;

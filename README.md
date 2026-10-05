@@ -28,7 +28,7 @@ Each commitment has an amount per payment, a frequency (daily, weekly, monthly o
 
 ## Updates
 
-- **PWA:** updates automatically. Each launch, and each return to the foreground, checks for a new version. A new version downloads in the background and replaces the old one. The page reloads into it only when that can't interrupt you: while the app is in the background, or right after launch with no sheet open. `scripts/build-sw.mjs` stamps `www/sw.js` with a hash of every file, so any change produces a new version. Run `npm run build:sw` after changing anything in `www/`; `npm test` fails if you forget.
+- **PWA:** each launch, each return to the app, and every hour while it stays open, it checks for a new version. A new version downloads and installs in the background, then an **Update** button appears in the bottom corner; tapping it switches to the new version. Nothing reloads on its own, and if the button is never tapped, the next launch opens the new version. `scripts/build-sw.mjs` stamps `www/sw.js` with a hash of every file, so any change produces a new version. Run `npm run build:sw` after changing anything in `www/`; `npm test` fails if you forget.
 - **Android:** the app has no internet permission, so it can't check for updates itself. Updates come from outside the app: the F-Droid client updates automatically, and for the GitHub release, [Obtainium](https://github.com/ImranR98/Obtainium) watches GitHub Releases and installs new versions.
 
 ## Backup

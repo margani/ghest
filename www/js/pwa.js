@@ -1,10 +1,9 @@
-// Browser-only: service worker registration, silent auto-update, install prompt.
+// Browser-only: service worker registration, update prompt, install prompt.
 // Inside the Android app none of this runs; updates there come from F-Droid or Obtainium.
 
 import { Capacitor } from './vendor/capacitor-core.js';
 
 const enabled = !Capacitor.isNativePlatform() && 'serviceWorker' in navigator && isSecureContext;
-const startedAt = Date.now();
 let installEvent = null;
 let onInstallChange = () => {};
 
@@ -30,39 +29,31 @@ export async function promptInstall() {
 
 /**
  * Register the service worker and keep the app current.
- * A new version installs in the background and takes over at once; the page then reloads
- * only when that can't interrupt anything: while hidden, or in the first seconds after
- * launch with no sheet open. `isBusy` says whether a sheet (editor, settings) is open.
+ * A new version downloads and activates in the background; `updateReady` is then called
+ * so the UI can offer an Update button. Nothing reloads on its own: if the button is never
+ * used, the next launch opens the new version anyway.
  */
-export function initPwa({ isBusy, installChanged }) {
+export function initPwa({ updateReady, installChanged }) {
   onInstallChange = installChanged;
   addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; installChanged(); });
   addEventListener('appinstalled', () => { installEvent = null; installChanged(); });
-  if (!enabled) return { settle() {} };
+  if (!enabled) return;
 
   const hadController = !!navigator.serviceWorker.controller;
-  let pending = false;
-
-  const settle = () => {
-    if (!pending) return;
-    if (document.hidden || (Date.now() - startedAt < 5000 && !isBusy())) location.reload();
-  };
-
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController) return; // first visit: the page is already this version
-    pending = true;
-    settle();
+    if (hadController) updateReady(); // on a first visit the page already is the current version
   });
 
   navigator.serviceWorker.register('sw.js').then(reg => {
-    // Check again whenever the app comes back to the foreground; reload when it goes away.
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) settle();
-      else reg.update().catch(() => {});
-    });
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+    setInterval(check, 60 * 60 * 1000); // tabs that stay open for days
   }).catch(e => console.warn('service worker', e));
+}
 
-  return { settle };
+/** Switch to the version the service worker has already installed. */
+export function applyUpdate() {
+  location.reload();
 }
 
 /** Ask the browser not to evict our storage under pressure (no prompt in most browsers). */
