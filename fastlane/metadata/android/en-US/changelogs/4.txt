@@ -1,0 +1,1 @@
+- Reproducible build: F-Droid can ship the same APK as GitHub, signed with the developer's key.
