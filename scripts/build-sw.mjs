@@ -7,7 +7,7 @@ import { join, relative } from 'node:path';
 
 const WWW = new URL('../www/', import.meta.url).pathname;
 const SW = join(WWW, 'sw.js');
-const SKIP = new Set(['sw.js', 'webview-update.html']);
+const SKIP = new Set(['sw.js', 'webview-update.html', '_headers']);
 
 function walk(dir) {
   return readdirSync(dir).sort().flatMap(name => {

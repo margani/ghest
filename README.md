@@ -20,7 +20,7 @@ Each commitment has an amount per payment, a frequency (daily, weekly, monthly o
 
 ## PWA (browser)
 
-`www/` is also a Progressive Web App, published to GitHub Pages by `.github/workflows/pages.yml`. Open it in Chrome, Edge or Firefox on Android and choose Install; on iOS, use Safari's Share → Add to Home Screen.
+`www/` is also a Progressive Web App, served as Cloudflare Workers static assets (`wrangler.jsonc`) and deployed with `npm run deploy`. Open it in Chrome, Edge or Firefox on Android and choose Install; on iOS, use Safari's Share → Add to Home Screen.
 
 - **Offline:** a service worker caches every file on the first visit. After that, the app opens and works with no network.
 - **Data:** stored in the browser's localStorage, with persistent storage requested so the browser doesn't evict it. Clearing site data deletes it, so export regularly. Safari deletes storage of sites unused for 7 days unless they're added to the home screen.

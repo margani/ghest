@@ -1,0 +1,13 @@
+{
+  // The PWA: www/ served as Workers static assets, no Worker code.
+  // Deployed with `npm run deploy` (wrangler via npx, so it isn't a build dependency
+  // of the Android app or the F-Droid recipe).
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "ghest",
+  "account_id": "cbaf7c8b254ee4af435b9d6e32d2c6f1",
+  "compatibility_date": "2026-10-05",
+  "assets": {
+    "directory": "./www",
+    "not_found_handling": "404-page"
+  }
+}

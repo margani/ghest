@@ -11,7 +11,8 @@
     "sync": "npm run vendor && cap sync android",
     "apk": "npm run sync && cd android && ./gradlew assembleDebug",
     "apk:release": "npm run sync && cd android && ./gradlew assembleRelease",
-    "build:sw": "node scripts/build-sw.mjs"
+    "build:sw": "node scripts/build-sw.mjs",
+    "deploy": "node scripts/build-sw.mjs --check && npx -y wrangler@4 deploy"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
