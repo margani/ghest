@@ -78,7 +78,7 @@ aapt2 dump permissions android/app/build/outputs/apk/debug/app-debug.apk
 1. Bump `versionCode` and `versionName` in `android/app/build.gradle`, and add `fastlane/metadata/android/{en-US,fa-IR}/changelogs/<versionCode>.txt`.
 2. Tag `v<versionName>` and push the tag. The release workflow runs the tests, builds a signed APK, checks that it requests no permissions, and publishes it to GitHub Releases with its SHA-256.
 
-The workflow needs four repository secrets: `GHEST_KEYSTORE_B64` (the keystore, base64-encoded), `GHEST_KEYSTORE_PASSWORD`, `GHEST_KEY_ALIAS` and `GHEST_KEY_PASSWORD`.
+The workflow needs four repository secrets: `GHEST_KEYSTORE_B64` (the keystore, base64-encoded), `GHEST_KEYSTORE_PASSWORD`, `GHEST_KEY_ALIAS` and `GHEST_KEY_PASSWORD`. `scripts/create-release-key.sh` creates the key and sets all four; run it once. A PKCS12 keystore has a single password, so both password secrets hold the same value.
 
 For a local signed build, put the same values in `android/keystore.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`). The file is gitignored. Without it, `npm run apk:release` produces an unsigned APK, which is what F-Droid builds and signs itself.
 
