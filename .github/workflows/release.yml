@@ -3,6 +3,8 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # Manual run = dry run: builds and signs with the real key, publishes nothing.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -21,6 +23,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Tag must match versionName
+        if: github.event_name == 'push'
         run: |
           name=$(sed -n 's/^ *versionName "\(.*\)"/\1/p' android/app/build.gradle)
           [ "v$name" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != versionName $name"; exit 1; }
@@ -39,7 +42,12 @@ jobs:
           npm run apk:release
           rm -f "$RUNNER_TEMP/release.jks"
       - run: ./scripts/check-apk.sh android/app/build/outputs/apk/release/app-release.apk
+      - name: Signing certificate
+        run: |
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          "$apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk | grep -E 'DN|SHA-256'
       - name: Publish
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
