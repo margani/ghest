@@ -248,23 +248,29 @@ function openEditor(id) {
 }
 
 function renderEditor(errors = {}) {
-  const { t, plain, monthNames, weekdays } = I;
+  const { t, plain, num, monthNames, weekdays } = I;
   const d = draft;
   const C = CALENDARS[d.calendar];
   const months = monthNames(d.calendar).map((n, i) => [i + 1, n]);
+  // Days and years are picked, not typed: one tap opens the native picker on phones.
+  const days = max => Array.from({ length: max }, (_, i) => [i + 1, num(i + 1)]);
+  const sp = C.toParts(d.startN ?? todayN);
+  const thisYear = C.toParts(todayN).y;
+  const [yLo, yHi] = YEAR_RANGE[d.calendar];
+  const years = [];
+  for (let y = Math.max(yLo, Math.min(sp.y, thisYear - 40)); y <= Math.min(yHi, Math.max(sp.y, thisYear + 10)); y++) years.push([y, plain(y)]);
   const sel = (name, opts, v) => `<select name="${name}">${opts.map(([k, l]) => `<option value="${k}"${String(k) === String(v) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   const n = v => (v === '' || v == null || Number.isNaN(v) ? v ?? '' : typeof v === 'number' ? plain(v) : v);
 
   const payDay = {
     daily: '',
     weekly: field('wd', t.payWeekday, sel('wd', weekdays(), d.wd)),
-    monthly: field('md', t.payMonthDay, text('md', n(d.md), 'num', 'numeric')),
-    yearly: field('yd', t.payYearDay, `<div class="split">${text('ydd', n(d.yd.d), 'num', 'numeric')}${sel('ydm', months, d.yd.m)}</div>`),
+    monthly: field('md', t.payMonthDay, sel('md', days(31), d.md), t.payMonthDayHint),
+    yearly: field('yd', t.payYearDay, `<div class="split">${sel('ydd', days(31), d.yd.d)}${sel('ydm', months, d.yd.m)}</div>`, t.payMonthDayHint),
   }[d.frequency];
 
-  const sp = d.startN != null ? C.toParts(d.startN) : { d: '', m: 1, y: '' };
   const when = d.mode === 'start'
-    ? field('start', t.startDate, `<div class="split3">${text('sd', n(sp.d), 'num', 'numeric')}${sel('sm', months, sp.m)}${text('sy', n(sp.y), 'num', 'numeric')}</div>`, t.startHint)
+    ? field('start', t.startDate, `<div class="split3">${sel('sd', days(C.monthLength(sp.y, sp.m)), sp.d)}${sel('sm', months, sp.m)}${sel('sy', years, sp.y)}</div>`, t.startHint)
     : field('remaining', t.remaining, text('remaining', n(d.remaining), 'num', 'numeric'), t.remainingHint);
 
   $('editForm').innerHTML = `<div class="sheet" tabindex="-1" autofocus>
@@ -280,11 +286,12 @@ function renderEditor(errors = {}) {
     ${payDay}
     <div class="split">
       ${field('total', t.total, text('total', n(d.total), 'num', 'numeric'))}
-      ${field('apr', t.aprField, text('apr', n(d.apr)), t.aprHint)}
+      ${field('apr', t.aprField, text('apr', n(d.apr)))}
     </div>
+    <small class="hint row-hint">${esc(t.aprHint)}</small>
     ${field('mode', t.mode, seg('mode', [['start', t.fromStart], ['remaining', t.fromRemaining]], d.mode))}
     ${when}
-    <div class="actions">
+    <div class="actions save-bar">
       <button type="submit" class="primary">${t.save}</button>
       ${d.id ? `<button type="button" class="danger" data-act="delete">${t.del}</button>` : `<button type="button" class="secondary" data-act="close">${t.cancel}</button>`}
     </div>
@@ -315,10 +322,9 @@ function collect() {
   if (f.remaining) d.remaining = numOr(val('remaining'));
   if (f.sd) {
     const C = CALENDARS[d.calendar];
-    const [dd, mm, yy] = [parseNumber(val('sd')), +val('sm'), parseNumber(val('sy'))];
-    const [lo, hi] = YEAR_RANGE[d.calendar];
-    d.startN = Number.isInteger(yy) && yy >= lo && yy <= hi && Number.isInteger(dd) && dd >= 1 && dd <= C.monthLength(yy, mm)
-      ? C.fromParts(yy, mm, dd) : null;
+    const [dd, mm, yy] = [+val('sd'), +val('sm'), +val('sy')];
+    // Moving to a shorter month keeps the day valid: 31 becomes that month's last day.
+    d.startN = C.fromParts(yy, mm, Math.min(dd, C.monthLength(yy, mm)));
   }
 }
 
@@ -344,7 +350,8 @@ function validateDraft() {
 }
 
 function onEditorChange(e) {
-  if (!['frequency', 'calendar', 'mode'].includes(e.target.name)) return;
+  // sm/sy change the length of the start month, so the day list is rebuilt.
+  if (!['frequency', 'calendar', 'mode', 'sm', 'sy'].includes(e.target.name)) return;
   collect();
   const d = draft;
   if (e.target.name === 'calendar') {
@@ -353,7 +360,7 @@ function onEditorChange(e) {
     // Keep the same real-world day for the start date; re-express pay days in the new calendar.
     const ref = CALENDARS[d.calendar].toParts(d.startN ?? todayN);
     if (prevCal !== d.calendar) { d.md = ref.d; d.yd = { m: ref.m, d: ref.d }; }
-  } else {
+  } else if (e.target.name !== 'sm' && e.target.name !== 'sy') {
     d[e.target.name] = e.target.value;
   }
   renderEditor();
