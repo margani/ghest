@@ -7,6 +7,7 @@ Categories:
   - Finance Manager
 License: GPL-3.0-only
 AuthorName: margani
+WebSite: https://ghest.margani.dev
 SourceCode: https://github.com/margani/ghest
 IssueTracker: https://github.com/margani/ghest/issues
 Changelog: https://github.com/margani/ghest/releases
@@ -39,6 +40,13 @@ Builds:
       - node_modules
 
 AllowedAPKSigningKeys: 6c52a1c4c46fe3767cd3f09b89749d91602527d23f19c941d936677ed6cef5f0
+
+MaintainerNotes: |-
+  Capacitor app (plain HTML/JS in www/, no bundler). Capacitor 8's CLI needs
+  Node >= 22, newer than Debian's nodejs, so sudo installs a pinned,
+  checksummed Node 22. node_modules only provides the Capacitor Android
+  sources and CLI; www/ is committed and copied by `cap sync`.
+  Reproducible: Binaries points at the GitHub release built by CI.
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
