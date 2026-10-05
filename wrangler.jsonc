@@ -6,6 +6,11 @@
   "name": "ghest",
   "account_id": "cbaf7c8b254ee4af435b9d6e32d2c6f1",
   "compatibility_date": "2026-10-05",
+  // The PWA's address. Browser data is tied to it, so it must not change once people use the app.
+  "routes": [{ "pattern": "ghest.margani.dev", "custom_domain": true }],
+  // Kept on while the first installs move over from the workers.dev address (data is per address).
+  "workers_dev": true,
+  "preview_urls": false,
   "assets": {
     "directory": "./www",
     "not_found_handling": "404-page"

@@ -10,7 +10,7 @@ An offline app for fixed recurring payments (loans, car finance, tuition, mahr) 
 
 ## Install
 
-- **Web (PWA):** https://ghest.whosane.workers.dev. Open it, then Settings → Install (Chrome, Edge) or Share → Add to Home Screen (Safari).
+- **Web (PWA):** https://ghest.margani.dev. Open it, then Settings → Install (Chrome, Edge) or Share → Add to Home Screen (Safari).
 - **Android:** download the APK from [the latest release](https://github.com/margani/ghest/releases/latest). To get updates automatically, add `https://github.com/margani/ghest` to [Obtainium](https://github.com/ImranR98/Obtainium).
 - **F-Droid:** coming.
 
