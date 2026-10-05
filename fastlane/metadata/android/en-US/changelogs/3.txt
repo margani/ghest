@@ -1,0 +1,1 @@
+- Screens open as full pages that slide in, with a Back button, like a native app. Back from the editor returns to the commitment's details.

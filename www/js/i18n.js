@@ -108,6 +108,7 @@ const S = {
     updateBtn: 'به‌روزرسانی',
     hijriHint: 'قمری بر اساس تقویم ام‌القری حساب می‌شه و ممکنه با تقویم رسمی ایران یک روز فرق داشته باشه.',
     close: 'بستن',
+    back: 'برگشت',
     toman: 'تومان',
   },
   en: {
@@ -205,6 +206,7 @@ const S = {
     updateBtn: 'Update',
     hijriHint: 'Lunar Hijri follows the Umm al-Qura calendar and can differ by a day from sighting-based calendars.',
     close: 'Close',
+    back: 'Back',
     toman: 'Toman',
   },
 };

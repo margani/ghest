@@ -35,12 +35,18 @@
 <!-- Shown by pwa.js when a new version has been installed in the background. -->
 <button type="button" class="update" id="updateBtn" hidden aria-live="polite"></button>
 
-<dialog id="editor"><form id="editForm" novalidate></form></dialog>
-<dialog id="details"><div id="detailsBody"></div></dialog>
-<dialog id="lumpSheet">
-  <div class="sheet" tabindex="-1">
-    <header><h2 id="lumpTitle"></h2>
-      <button type="button" class="icon" id="lumpClose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+<!-- Full-screen pages, pushed and popped by nav.js. -->
+<section class="page" id="details" aria-hidden="true" inert>
+  <header class="appbar"><button type="button" class="icon back" data-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1 class="appbar-title" tabindex="-1"></h1></header>
+  <div class="page-body" id="detailsBody"></div>
+</section>
+<section class="page" id="editor" aria-hidden="true" inert>
+  <header class="appbar"><button type="button" class="icon back" data-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1 class="appbar-title" tabindex="-1"></h1></header>
+  <form class="page-body" id="editForm" novalidate></form>
+</section>
+<section class="page" id="lumpPage" aria-hidden="true" inert>
+  <header class="appbar"><button type="button" class="icon back" data-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1 class="appbar-title" tabindex="-1"></h1></header>
+  <div class="page-body">
     <p class="hint" id="lumpHint"></p>
     <label for="lumpAmount" id="lumpLabel"></label>
     <div class="lumpRow">
@@ -49,8 +55,11 @@
     </div>
     <div id="lumpRes"></div>
   </div>
-</dialog>
-<dialog id="settings"><div id="settingsBody"></div></dialog>
+</section>
+<section class="page" id="settings" aria-hidden="true" inert>
+  <header class="appbar"><button type="button" class="icon back" data-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1 class="appbar-title" tabindex="-1"></h1></header>
+  <div class="page-body" id="settingsBody"></div>
+</section>
 <input type="file" id="importFile" hidden>
 </body>
 </html>

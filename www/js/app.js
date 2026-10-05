@@ -2,6 +2,7 @@ import { CALENDARS, today, dayFromISO, isoFromDay, weekday } from './calendars.j
 import { FREQUENCIES, status, lumpSum, firstFromStart, firstFromRemaining } from './schedule.js';
 import { LANGS, makeI18n, currencies, parseNumber, guessDefaults } from './i18n.js';
 import { load, save, exportFile, parseImport } from './store.js';
+import { initNav, push, back, isOpen, depth } from './nav.js';
 import { initPwa, applyUpdate, isBrowser, standalone, iosManualInstall, canPromptInstall, promptInstall, requestPersistentStorage } from './pwa.js';
 
 const $ = id => document.getElementById(id);
@@ -13,7 +14,8 @@ let doc;          // persisted document
 let I;            // i18n for current prefs
 let todayN;       // today's day number, refreshed on every render
 let draft = null; // commitment being edited
-let detailId = null; // commitment shown in the details sheet
+let detailId = null; // commitment shown on the details page
+let editorFromDetails = false; // whether Back from the editor lands on details
 
 // --- boot -----------------------------------------------------------------------
 
@@ -29,12 +31,9 @@ async function init() {
     if (row) openDetails(row.dataset.id);
   };
   $('detailsBody').onclick = e => {
-    const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'close') closeSheet();
-    if (act === 'edit') openEditor(detailId, true);
+    if (e.target.closest('[data-act=edit]')) openEditor(detailId, true);
   };
-  $('lumpBtn').onclick = () => { openSheet($('lumpSheet')); $('lumpAmount').focus(); };
-  $('lumpClose').onclick = closeSheet;
+  $('lumpBtn').onclick = () => push($('lumpPage'), $('lumpAmount'));
   $('lumpAmount').oninput = renderLump;
   $('lumpCurrency').onchange = renderLump;
   $('importFile').onchange = onImport;
@@ -44,16 +43,11 @@ async function init() {
 
   initPwa({
     updateReady: () => { $('updateBtn').hidden = false; },
-    installChanged: () => { if ($('settings').open) renderSettings(); },
+    installChanged: () => { if (isOpen($('settings'))) renderSettings(); },
   });
   $('updateBtn').onclick = applyUpdate;
 
-  // Android back closes the open sheet: each sheet pushes a history entry.
-  window.addEventListener('popstate', () => document.querySelectorAll('dialog[open]').forEach(d => d.close()));
-  for (const d of document.querySelectorAll('dialog')) {
-    d.addEventListener('cancel', e => { e.preventDefault(); closeSheet(); });
-    d.addEventListener('click', e => { if (e.target === d) closeSheet(); }); // backdrop tap
-  }
+  initNav();
 }
 
 function applyPrefs() {
@@ -69,17 +63,8 @@ function persist() {
   requestPersistentStorage();
 }
 
-/** Open a sheet. `replace` swaps it for the one already open (details → editor) under one history entry. */
-function openSheet(dialog, replace = false) {
-  if (replace) document.querySelectorAll('dialog[open]').forEach(d => d.close());
-  dialog.showModal();
-  dialog.scrollTop = 0;
-  if (replace) history.replaceState({ sheet: dialog.id }, '');
-  else history.pushState({ sheet: dialog.id }, '');
-}
-
-function closeSheet() {
-  if (document.querySelector('dialog[open]')) history.back();
+function setTitle(page, text) {
+  $(page).querySelector('.appbar-title').textContent = text;
 }
 
 // --- main screen -----------------------------------------------------------------
@@ -92,9 +77,10 @@ function render() {
   $('addBtn').textContent = t.add;
   $('updateBtn').textContent = t.updateBtn;
   $('foot').textContent = doc.commitments.length ? t.foot : '';
-  $('lumpTitle').textContent = t.lumpTitle;
   $('lumpBtn').textContent = t.lumpTitle;
-  $('lumpClose').setAttribute('aria-label', t.close);
+  setTitle('lumpPage', t.lumpTitle);
+  setTitle('settings', t.settings);
+  for (const b of document.querySelectorAll('[data-back]')) b.setAttribute('aria-label', t.back);
   $('lumpHint').textContent = t.lumpHint;
   $('lumpLabel').textContent = t.lumpLabel;
 
@@ -108,7 +94,7 @@ function render() {
   const maxApr = priced.length > 1 ? Math.max(...priced.map(r => r.c.apr)) : null;
   hottest = maxApr;
   $('list').innerHTML = rows.map(r => renderRow(r, r.c.apr === maxApr && !r.s.done)).join('');
-  if ($('details').open) renderDetails(); // e.g. the date rolled over while it was open
+  if (isOpen($('details'))) renderDetails(); // after an edit, or the date rolled over while it was open
   renderLump();
 }
 
@@ -178,17 +164,18 @@ function renderRow({ c, cur, s }, hot) {
 function openDetails(id) {
   detailId = id;
   renderDetails();
-  openSheet($('details'));
+  push($('details'));
 }
 
 function renderDetails() {
   const c = doc.commitments.find(x => x.id === detailId);
   if (!c) return;
   const r = { c, cur: c.currency || doc.prefs.currency, s: status(c, todayN) };
+  setTitle('details', c.name);
   $('detailsBody').innerHTML = renderDetail(r, c.apr === hottest && !r.s.done);
 }
 
-/** Everything about one commitment, shown in the details sheet. */
+/** Everything about one commitment, shown on the details page. */
 function renderDetail({ c, cur, s }, hot) {
   const { t, num, money, date, monthYear } = I;
   const progress = c.total <= 120
@@ -197,10 +184,7 @@ function renderDetail({ c, cur, s }, hot) {
     : `<div class="bar"><i style="inline-size:${(100 * s.paid) / c.total}%"></i></div>`;
   const rate = c.apr ? t.apr(num(c.apr, 2)) + (hot ? t.hottest : '') : t.noInterest;
 
-  return `<div class="sheet" tabindex="-1" autofocus>
-    <header><h2>${esc(c.name)}</h2>
-      <button type="button" class="icon" data-act="close" aria-label="${t.close}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
-    <p class="rate${hot ? ' hot' : ''}">${rate}</p>
+  return `<p class="rate${hot ? ' hot' : ''}">${rate}</p>
     <div role="img" aria-label="${esc(t.progressLabel(num(s.paid), num(c.total)))}">${progress}</div>
     <div class="nums">
       <div><b>${t.of(num(s.remaining), num(c.total))}</b>${t.paymentsLeft}</div>
@@ -213,8 +197,7 @@ function renderDetail({ c, cur, s }, hot) {
       <div><b>${monthYear(s.end)}</b>${t.end}</div>
     </div>
     <div class="last">${t.lastPaid}: <b>${s.lastPaid != null ? date(s.lastPaid) : t.nonePaid}</b></div>
-    <div class="actions"><button type="button" class="primary" data-act="edit">${t.edit}</button></div>
-  </div>`;
+    <div class="actions"><button type="button" class="primary wide" data-act="edit">${t.edit}</button></div>`;
 }
 
 function renderLump() {
@@ -282,9 +265,9 @@ function openEditor(id, fromDetails = false) {
   draft.wd = draft.frequency === 'weekly' ? draft.payDay : weekday(todayN);
   draft.md = draft.frequency === 'monthly' ? draft.payDay : p.d;
   draft.yd = draft.frequency === 'yearly' ? draft.payDay : { m: p.m, d: p.d };
+  editorFromDetails = fromDetails;
   renderEditor();
-  openSheet($('editor'), fromDetails);
-  if (!c) $('editForm').elements.name.focus();
+  push($('editor'), c ? null : $('editForm').elements.name);
 }
 
 function renderEditor(errors = {}) {
@@ -313,9 +296,8 @@ function renderEditor(errors = {}) {
     ? field('start', t.startDate, `<div class="split3">${sel('sd', days(C.monthLength(sp.y, sp.m)), sp.d)}${sel('sm', months, sp.m)}${sel('sy', years, sp.y)}</div>`, t.startHint)
     : field('remaining', t.remaining, text('remaining', n(d.remaining), 'num', 'numeric'), t.remainingHint);
 
-  $('editForm').innerHTML = `<div class="sheet" tabindex="-1" autofocus>
-    <header><h2>${d.id ? t.editTitle : t.newTitle}</h2>
-      <button type="button" class="icon" data-act="close" aria-label="${t.close}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+  setTitle('editor', d.id ? t.editTitle : t.newTitle);
+  $('editForm').innerHTML = `
     ${field('name', t.name, `<input type="text" name="name" value="${esc(d.name)}" placeholder="${esc(t.namePh)}" autocomplete="off">`)}
     <div class="split">
       ${field('amount', t.amount, text('amount', n(d.amount)))}
@@ -333,9 +315,8 @@ function renderEditor(errors = {}) {
     ${when}
     <div class="actions save-bar">
       <button type="submit" class="primary">${t.save}</button>
-      ${d.id ? `<button type="button" class="danger" data-act="delete">${t.del}</button>` : `<button type="button" class="secondary" data-act="close">${t.cancel}</button>`}
-    </div>
-  </div>`;
+      ${d.id ? `<button type="button" class="danger" data-act="delete">${t.del}</button>` : `<button type="button" class="secondary" data-back>${t.cancel}</button>`}
+    </div>`;
 
   for (const [name, msg] of Object.entries(errors)) {
     const f = $('editForm').querySelector(`[data-field="${name}"]`);
@@ -431,18 +412,16 @@ function onEditorSubmit(e) {
   const i = doc.commitments.findIndex(x => x.id === c.id);
   if (i >= 0) doc.commitments[i] = c; else doc.commitments.push(c);
   persist();
-  closeSheet();
-  render();
+  render(); // also refreshes the details page underneath, which Back returns to
+  back();
 }
 
 function onEditorClick(e) {
-  const act = e.target.closest('[data-act]')?.dataset.act;
-  if (act === 'close') closeSheet();
-  if (act === 'delete' && confirm(I.t.confirmDelete(draft.name))) {
+  if (e.target.closest('[data-act=delete]') && confirm(I.t.confirmDelete(draft.name))) {
     doc.commitments = doc.commitments.filter(c => c.id !== draft.id);
     persist();
-    closeSheet();
     render();
+    back(editorFromDetails ? 2 : 1); // the details page of a deleted commitment has nothing to show
   }
 }
 
@@ -454,9 +433,8 @@ $('editForm').addEventListener('click', onEditorClick);
 
 function renderSettings() {
   const { t } = I;
-  $('settingsBody').innerHTML = `<div class="sheet" tabindex="-1" autofocus>
-    <header><h2>${t.settings}</h2>
-      <button type="button" class="icon" data-act="close" aria-label="${t.close}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+  setTitle('settings', t.settings);
+  $('settingsBody').innerHTML = `
     ${field('lang', t.language, seg('lang', [['fa', 'فارسی'], ['en', 'English']], doc.prefs.lang))}
     ${field('displayCalendar', t.displayCalendar, seg('displayCalendar', CAL_ORDER.map(c => [c, t.cal[c]]), doc.prefs.displayCalendar))}
     ${field('currency', t.defaultCurrency, `<select name="currency">${currencyOptions(doc.prefs.currency, false)}</select>`)}
@@ -473,13 +451,12 @@ function renderSettings() {
       <p class="hint">${canPromptInstall() ? t.installHint : t.installIos}</p>
       ${canPromptInstall() ? `<button type="button" class="primary wide" data-act="install">${t.installBtn}</button>` : ''}
     </div>` : ''}
-    <p class="about">${isBrowser ? t.aboutWeb : t.about}</p>
-  </div>`;
+    <p class="about">${isBrowser ? t.aboutWeb : t.about}</p>`;
 }
 
 function openSettings() {
   renderSettings();
-  openSheet($('settings'));
+  push($('settings'));
 }
 
 $('settingsBody').addEventListener('change', e => {
@@ -498,7 +475,6 @@ $('settingsBody').addEventListener('change', e => {
 
 $('settingsBody').addEventListener('click', async e => {
   const act = e.target.closest('[data-act]')?.dataset.act;
-  if (act === 'close') closeSheet();
   if (act === 'import') $('importFile').click();
   if (act === 'install') promptInstall();
   if (act === 'export') {
@@ -526,8 +502,8 @@ async function onImport(e) {
   doc = next;
   persist();
   applyPrefs();
-  closeSheet();
   render();
+  back(depth()); // back to the home screen with the imported data
 }
 
 init();
