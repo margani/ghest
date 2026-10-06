@@ -29,6 +29,14 @@ jobs:
           [ "v$name" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != versionName $name"; exit 1; }
       - run: npm ci
       - run: npm test
+      - name: Committed Android web assets match www/
+        run: |
+          npm run sync
+          if [ -n "$(git status --porcelain android)" ]; then
+            git status --porcelain android
+            echo "::error::android/ is out of date with www/. Run 'npm run sync' and commit the result."
+            exit 1
+          fi
       - name: Build signed release
         env:
           GHEST_KEYSTORE_B64: ${{ secrets.GHEST_KEYSTORE_B64 }}

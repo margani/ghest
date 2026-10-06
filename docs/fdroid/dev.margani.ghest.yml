@@ -1,7 +1,7 @@
 # Draft recipe for fdroiddata (metadata/dev.margani.ghest.yml).
 # `fdroid lint` and `fdroid scanner` pass. Reproducible: a local build of the tag matches
 # the signed GitHub release (apksigcopier compare), so Binaries/AllowedAPKSigningKeys are set.
-# Capacitor 8's CLI needs Node >= 22, newer than Debian trixie's nodejs, hence the pinned download.
+# The output of `cap sync` is committed, so only Debian's nodejs/npm are needed (no Capacitor CLI).
 
 Categories:
   - Finance Manager
@@ -25,27 +25,20 @@ Builds:
     subdir: android/app
     sudo:
       - apt-get update
-      - apt-get install -y curl xz-utils
-      - curl -fsSLo /tmp/node.tar.xz https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz
-      - echo 'df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de  /tmp/node.tar.xz'
-        | sha256sum -c -
-      - tar xJf /tmp/node.tar.xz -C /opt
-      - ln -s /opt/node-v22.23.3-linux-x64/bin/node /opt/node-v22.23.3-linux-x64/bin/npm
-        /opt/node-v22.23.3-linux-x64/bin/npx /usr/local/bin/
+      - apt-get install -y nodejs npm
     init: cd ../.. && npm ci --ignore-scripts
     gradle:
       - yes
-    prebuild: cd ../.. && npm run vendor && npx cap sync android
     scanignore:
       - node_modules
 
 AllowedAPKSigningKeys: 6c52a1c4c46fe3767cd3f09b89749d91602527d23f19c941d936677ed6cef5f0
 
 MaintainerNotes: |-
-  Capacitor app (plain HTML/JS in www/, no bundler). Capacitor 8's CLI needs
-  Node >= 22, newer than Debian's nodejs, so sudo installs a pinned,
-  checksummed Node 22. node_modules only provides the Capacitor Android
-  sources and CLI; www/ is committed and copied by `cap sync`.
+  Capacitor app (plain HTML/JS in www/, no bundler). The output of `cap sync`
+  (web assets copy, plugin module, configs) is committed, so the build needs
+  no Capacitor CLI; Debian's nodejs/npm only install the Capacitor Android
+  sources into node_modules. Upstream CI fails if the committed copy drifts.
   Reproducible: Binaries points at the GitHub release built by CI.
 
 AutoUpdateMode: Version

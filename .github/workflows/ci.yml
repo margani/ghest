@@ -20,6 +20,14 @@ jobs:
           java-version: 21
       - run: npm ci
       - run: npm test
+      - name: Committed Android web assets match www/
+        run: |
+          npm run sync
+          if [ -n "$(git status --porcelain android)" ]; then
+            git status --porcelain android
+            echo "::error::android/ is out of date with www/. Run 'npm run sync' and commit the result."
+            exit 1
+          fi
       - run: npm run apk
       - run: ./scripts/check-apk.sh android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4

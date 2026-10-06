@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>قسط</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#EDF0F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121821" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="css/app.css">
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<main>
+  <header class="top">
+    <span class="brand" id="brand"></span>
+    <button type="button" class="icon" id="settingsBtn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    </button>
+  </header>
+
+  <section id="summary"></section>
+  <div id="list"></div>
+  <button type="button" class="primary wide" id="addBtn"></button>
+  <button type="button" class="secondary wide" id="lumpBtn" hidden></button>
+
+
+  <p class="foot" id="foot"></p>
+</main>
+
+<!-- Shown by pwa.js when a new version has been installed in the background. -->
+<button type="button" class="update" id="updateBtn" hidden aria-live="polite"></button>
+
+<!-- Full-screen pages, pushed and popped by nav.js. -->
+<section class="page" id="details" aria-hidden="true" inert>
+  <header class="appbar"><button type="button" class="icon back" data-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1 class="appbar-title" tabindex="-1"></h1></header>
+  <div class="page-body" id="detailsBody"></div>
+</section>
+<section class="page" id="editor" aria-hidden="true" inert>
+  <header class="appbar"><button type="button" class="icon back" data-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1 class="appbar-title" tabindex="-1"></h1></header>
+  <form class="page-body" id="editForm" novalidate></form>
+</section>
+<section class="page" id="lumpPage" aria-hidden="true" inert>
+  <header class="appbar"><button type="button" class="icon back" data-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1 class="appbar-title" tabindex="-1"></h1></header>
+  <div class="page-body">
+    <p class="hint" id="lumpHint"></p>
+    <label for="lumpAmount" id="lumpLabel"></label>
+    <div class="lumpRow">
+      <input id="lumpAmount" class="big" type="text" inputmode="decimal" autocomplete="off">
+      <select id="lumpCurrency" hidden></select>
+    </div>
+    <div id="lumpRes"></div>
+  </div>
+</section>
+<section class="page" id="settings" aria-hidden="true" inert>
+  <header class="appbar"><button type="button" class="icon back" data-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1 class="appbar-title" tabindex="-1"></h1></header>
+  <div class="page-body" id="settingsBody"></div>
+</section>
+<input type="file" id="importFile" hidden>
+</body>
+</html>

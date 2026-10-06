@@ -1,0 +1,13 @@
+{
+	"appId": "dev.margani.ghest",
+	"appName": "Ghest",
+	"webDir": "www",
+	"android": {
+		"allowMixedContent": false,
+		"captureInput": false,
+		"minWebViewVersion": 99
+	},
+	"server": {
+		"errorPath": "webview-update.html"
+	}
+}
