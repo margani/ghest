@@ -19,9 +19,9 @@ Repo: https://github.com/margani/ghest.git
 Binaries: https://github.com/margani/ghest/releases/download/v%v/ghest-%v.apk
 
 Builds:
-  - versionName: 1.0.4
-    versionCode: 5
-    commit: 20d7c851e2d3676d7f46123094abe509b2f3a95d
+  - versionName: 1.0.5
+    versionCode: 6
+    commit: 6d9f9e81b19c3c65c057c3bf5e5deae50ce7bc81
     subdir: android/app
     sudo:
       - apt-get update
@@ -43,5 +43,5 @@ MaintainerNotes: |-
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.0.4
-CurrentVersionCode: 5
+CurrentVersion: 1.0.5
+CurrentVersionCode: 6
