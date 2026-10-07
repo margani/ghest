@@ -15,23 +15,16 @@
 - Local dev: `npm run dev` (wrangler dev, http://localhost:8787)
 
 ## GitHub workflow
-- For every feature, bug, or problem, create a GitHub issue first.
-- Create a branch from `sandbox` (e.g. `23-show-version`) and a PR into `sandbox` that references the issue. When the work is done, tests pass, and the visual check is clean, merge the PR yourself.
-- This keeps a full history of what was done and why.
-- If a task must be done by the owner (a dashboard setting, an account, a device, a decision), create an issue, assign it to `margani`, and label it `needs-owner`. Do NOT try to do it yourself.
-- All repo text is English: issues, PRs, commits, code comments, docs. Persian appears only in the `fa` UI strings and the `fa-IR` store listing.
-
-## Writing owner issues — accuracy rule (IMPORTANT)
-- Never invent UI steps for an external service (Cloudflare, GitHub, GitLab, F-Droid, etc.). Before writing step-by-step instructions, READ the official current docs for that exact service and base the steps on them.
-- If you cannot verify a step from docs, do NOT write a confident fake step. Say plainly: "Could not verify this step — please check," and link the relevant docs page.
-- Any command handed to the owner must be tested first and must not be interactive in a surprising way.
+- Owner issues, owner-task handoff, visual-check basics: see the global `~/.claude/CLAUDE.md`.
+- Issue first, then a branch from `sandbox` (e.g. `23-show-version`) and a PR into `sandbox` that references the issue. When tests pass and the visual check is clean, merge the PR yourself.
+- Owner tasks: issue assigned to `margani`, label `needs-owner`. Commands handed to the owner must be tested first.
+- All repo text is English. Persian appears only in the `fa` UI strings and the `fa-IR` store listing.
 
 ## Visual testing
 - For UI changes, run `npm run dev` (wrangler dev) first, then open the LOCAL url it prints (http://localhost:8787) with Playwright and screenshot it.
 - Playwright: `playwright-core` with `executablePath: '/usr/bin/google-chrome'` (kept outside the repo). Check phone size (412×915) and desktop, Persian (RTL) and English, light and dark.
-- Check for overlapping buttons, text under buttons, transparent backgrounds over text, broken layout. Fix and re-screenshot to confirm.
 - Native-only behaviour (storage, file picker, share sheet, back gesture): Android emulator AVD `inkla`.
-- Do not test visually against production or the remote sandbox in dev.
+- Do not test visually against production or the remote sandbox; use the local url.
 - Screenshots and store images use fictional demo data, never the owner's real loans (`my-loans.local.json` is gitignored and stays local).
 
 ## Versioning & deploy
@@ -53,13 +46,11 @@
 - Local dev: `npm run dev` (wrangler dev)
 - Sandbox deploy: `npm run deploy:sandbox` (url: https://ghest-sandbox.whosane.workers.dev). Automatic from `sandbox` once `CLOUDFLARE_API_TOKEN` exists (#22).
 - Production deploy: `npm run deploy:production` (url: https://ghest.margani.dev). Automatic from `main` once the token exists.
-- NEVER deploy to production unless the owner explicitly says so.
 - The old address https://ghest.whosane.workers.dev still serves production while early installs move their data; turn it off (`workers_dev: false` at the top level of `wrangler.jsonc`) when the owner confirms.
 
 ## Data safety
 - There is no server database. Data lives on the device: SharedPreferences (Android) or browser storage per origin (PWA). The sandbox is a different origin, so it never sees production data.
-- Local/sandbox testing uses demo data, never the owner's real data.
-- Never commit secrets: the release keystore is `~/keys/ghest-release.jks` (local only); signing values live in GitHub secrets.
+- The release keystore is `~/keys/ghest-release.jks` (local only, never committed); signing values live in GitHub secrets.
 
 ## F-Droid
 - Merge request: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/51279. Recipe copy: `docs/fdroid/dev.margani.ghest.yml` (pinned to a full commit hash; reproducible build with `Binaries` + `AllowedAPKSigningKeys`).
