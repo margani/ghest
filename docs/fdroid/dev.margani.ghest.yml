@@ -32,7 +32,7 @@ Builds:
       - npm ci --ignore-scripts
     gradle:
       - yes
-    scanignore:
+    scandelete:
       - node_modules
 
 AllowedAPKSigningKeys: 6c52a1c4c46fe3767cd3f09b89749d91602527d23f19c941d936677ed6cef5f0
