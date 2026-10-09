@@ -12,7 +12,9 @@
     "apk": "npm run sync && cd android && ./gradlew assembleDebug",
     "apk:release": "npm run sync && cd android && ./gradlew assembleRelease",
     "build:sw": "node scripts/build-sw.mjs",
-    "deploy": "node scripts/build-sw.mjs --check && npx -y wrangler@4 deploy"
+    "deploy:sandbox": "node scripts/build-sw.mjs --check && npx -y wrangler@4 deploy --env sandbox",
+    "deploy:production": "node scripts/build-sw.mjs --check && npx -y wrangler@4 deploy",
+    "dev": "npx -y wrangler@4 dev"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

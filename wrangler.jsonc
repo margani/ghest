@@ -14,5 +14,19 @@
   "assets": {
     "directory": "./www",
     "not_found_handling": "404-page"
+  },
+  // Sandbox: the owner tests collected changes here before a production release.
+  // Its own Worker and workers.dev address, so browser data never mixes with production.
+  "env": {
+    "sandbox": {
+      "name": "ghest-sandbox",
+      "routes": [],
+      "workers_dev": true,
+      "preview_urls": false,
+      "assets": {
+        "directory": "./www",
+        "not_found_handling": "404-page"
+      }
+    }
   }
 }
