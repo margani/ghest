@@ -47,7 +47,7 @@
 - Sandbox deploy: automatic on every push to `sandbox` (`.github/workflows/deploy.yml`, url: https://ghest-sandbox.whosane.workers.dev). By hand: `npm run deploy:sandbox`.
 - Production deploy: automatic on every push to `main`, i.e. the release PR (url: https://ghest.margani.dev). Never by hand; to redeploy the current `main`, re-run its Deploy PWA workflow run.
 - No version endpoint yet (#23): verify a deploy by comparing the live `/sw.js` with `www/sw.js` on the branch (it carries a hash of every file).
-- The old address https://ghest.whosane.workers.dev still serves production while early installs move their data; turn it off (`workers_dev: false` at the top level of `wrangler.jsonc`) when the owner confirms.
+- The old production address https://ghest.whosane.workers.dev is off (`workers_dev: false` at the top level of `wrangler.jsonc`, 2026-10-09). The sandbox environment sets its own `workers_dev: true`; keep it, it is the sandbox's only address.
 
 ## Data safety
 - There is no server database. Data lives on the device: SharedPreferences (Android) or browser storage per origin (PWA). The sandbox is a different origin, so it never sees production data.

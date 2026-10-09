@@ -8,8 +8,9 @@
   "compatibility_date": "2026-10-05",
   // The PWA's address. Browser data is tied to it, so it must not change once people use the app.
   "routes": [{ "pattern": "ghest.margani.dev", "custom_domain": true }],
-  // Kept on while the first installs move over from the workers.dev address (data is per address).
-  "workers_dev": true,
+  // Off since 2026-10-09: early installs have moved to ghest.margani.dev, so the old
+  // ghest.whosane.workers.dev address no longer serves the app (data is per address).
+  "workers_dev": false,
   "preview_urls": false,
   "assets": {
     "directory": "./www",
