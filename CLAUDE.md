@@ -44,8 +44,9 @@
 
 ## Environments
 - Local dev: `npm run dev` (wrangler dev)
-- Sandbox deploy: `npm run deploy:sandbox` (url: https://ghest-sandbox.whosane.workers.dev). Automatic from `sandbox` once `CLOUDFLARE_API_TOKEN` exists (#22).
-- Production deploy: `npm run deploy:production` (url: https://ghest.margani.dev). Automatic from `main` once the token exists.
+- Sandbox deploy: automatic on every push to `sandbox` (`.github/workflows/deploy.yml`, url: https://ghest-sandbox.whosane.workers.dev). By hand: `npm run deploy:sandbox`.
+- Production deploy: automatic on every push to `main`, i.e. the release PR (url: https://ghest.margani.dev). Never by hand; to redeploy the current `main`, re-run its Deploy PWA workflow run.
+- No version endpoint yet (#23): verify a deploy by comparing the live `/sw.js` with `www/sw.js` on the branch (it carries a hash of every file).
 - The old address https://ghest.whosane.workers.dev still serves production while early installs move their data; turn it off (`workers_dev: false` at the top level of `wrangler.jsonc`) when the owner confirms.
 
 ## Data safety
@@ -58,6 +59,6 @@
 - Keep reviewer replies short.
 
 ## Open tasks
-- Owner: #2 test on your phone, #7 review the Persian copy, #22 Cloudflare API token.
-- F-Droid review: #4, #16 (Node from forky, list-form commands, R8).
+- Owner: #2 test on your phone, #7 review the Persian copy.
+- F-Droid review: #4 (1.0.7 recipe green and reproducible; waiting for an on-device test).
 - After F-Droid release: #15 theme setting, #23 show the version.
