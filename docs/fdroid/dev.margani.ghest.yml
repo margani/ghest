@@ -19,9 +19,9 @@ Repo: https://github.com/margani/ghest.git
 Binaries: https://github.com/margani/ghest/releases/download/v%v/ghest-%v.apk
 
 Builds:
-  - versionName: 1.0.6
-    versionCode: 7
-    commit: 2b2a806fbe926274510afe28f7a28ae50c356ff1
+  - versionName: 1.0.7
+    versionCode: 8
+    commit: 4d6e9d1d90cbb48fb637a0ad59d6ff695279a1ae
     subdir: android/app
     sudo:
       - echo 'deb https://deb.debian.org/debian forky main' > /etc/apt/sources.list.d/forky.list
@@ -46,5 +46,5 @@ MaintainerNotes: |-
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.0.6
-CurrentVersionCode: 7
+CurrentVersion: 1.0.7
+CurrentVersionCode: 8
