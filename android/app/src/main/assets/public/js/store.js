@@ -3,7 +3,7 @@
 // browser (development), localStorage stands in.
 //
 // The stored document and the export file are the same shape:
-//   { app: 'ghest', version: 1, prefs: {lang, displayCalendar, currency}, commitments: [...] }
+//   { app: 'ghest', version: 1, prefs: {lang, displayCalendar, currency, theme}, commitments: [...] }
 
 import { FREQUENCIES } from './schedule.js';
 import { CALENDARS, dayFromISO, isoFromDay } from './calendars.js';
@@ -12,6 +12,7 @@ import { Capacitor, registerPlugin } from './vendor/capacitor-core.js';
 
 const KEY = 'ghest';
 const VERSION = 1;
+export const THEMES = ['system', 'light', 'dark'];
 
 const native = Capacitor.isNativePlatform();
 const Preferences = native ? registerPlugin('Preferences') : null;
@@ -73,6 +74,8 @@ function validate(doc) {
   if (doc.version !== VERSION) fail(`unsupported version ${doc.version}`);
   const p = doc.prefs || {};
   if (!LANGS[p.lang] || !CALENDARS[p.displayCalendar] || !isCurrency(p.currency)) fail('prefs');
+  // Backups made before the theme setting have no `theme`; they follow the device.
+  if (p.theme != null && !THEMES.includes(p.theme)) fail('prefs');
   if (!Array.isArray(doc.commitments)) fail('commitments');
   const ids = new Set();
   const commitments = doc.commitments.map((c, i) => {
@@ -103,7 +106,7 @@ function validate(doc) {
   });
   return {
     app: 'ghest', version: VERSION,
-    prefs: { lang: p.lang, displayCalendar: p.displayCalendar, currency: p.currency },
+    prefs: { lang: p.lang, displayCalendar: p.displayCalendar, currency: p.currency, theme: p.theme ?? 'system' },
     commitments,
   };
 }

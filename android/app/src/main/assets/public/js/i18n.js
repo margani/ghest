@@ -90,6 +90,8 @@ const S = {
     language: 'زبان',
     displayCalendar: 'تقویم نمایش',
     defaultCurrency: 'ارز پیش‌فرض',
+    theme: 'ظاهر',
+    themes: { system: 'خودکار', light: 'روشن', dark: 'تیره' },
     dflt: 'پیش‌فرض',
     backup: 'پشتیبان',
     backupHint: 'داده‌ها فقط روی همین گوشی‌ان. با حذف اپ یا پاک کردن داده‌هاش از بین می‌رن، پس گاهی خروجی بگیر.',
@@ -188,6 +190,8 @@ const S = {
     language: 'Language',
     displayCalendar: 'Display calendar',
     defaultCurrency: 'Default currency',
+    theme: 'Theme',
+    themes: { system: 'System', light: 'Light', dark: 'Dark' },
     dflt: 'Default',
     backup: 'Backup',
     backupHint: 'Your data lives only on this phone. Uninstalling or clearing app data deletes it, so export now and then.',
@@ -296,5 +300,5 @@ export function guessDefaults(navLang = 'en') {
   const EURO = 'AT BE CY DE EE ES FI FR GR HR IE IT LT LU LV MT NL PT SI SK'.split(' ');
   const BY_REGION = { IR: 'IRT', GB: 'GBP', US: 'USD', CA: 'CAD', AU: 'AUD', TR: 'TRY', AE: 'AED', AF: 'AFN', SE: 'SEK', NO: 'NOK', DK: 'DKK', CH: 'CHF' };
   const currency = BY_REGION[region] || (EURO.includes(region) ? 'EUR' : lang === 'fa' ? 'IRT' : 'USD');
-  return { lang, displayCalendar: LANGS[lang].calendar, currency };
+  return { lang, displayCalendar: LANGS[lang].calendar, currency, theme: 'system' };
 }
