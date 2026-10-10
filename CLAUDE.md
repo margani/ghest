@@ -28,7 +28,7 @@
 - Screenshots and store images use fictional demo data, never the owner's real loans (`my-loans.local.json` is gitignored and stays local).
 
 ## Versioning & deploy
-- Version: `versionName`/`versionCode` in `android/app/build.gradle` (single source). Showing it in the app is tracked in #23.
+- Version: `versionName`/`versionCode` in `android/app/build.gradle` (single source). `npm run build:sw` stamps it with the build hash into `www/version.json`, which Settings shows (plus `sandbox`/`dev` and the hash outside production).
 - Branch model:
   - `main` -> PRODUCTION (https://ghest.margani.dev, and Android releases).
   - `sandbox` -> SANDBOX (https://ghest-sandbox.whosane.workers.dev).
@@ -40,13 +40,13 @@
 
 ## PWA
 - Updates install automatically in the background; an Update button appears when a new version is ready (`www/js/pwa.js`, `www/sw.js`). `scripts/build-sw.mjs` stamps `sw.js` with a hash of every file, so any change is a new version.
-- Tie the shown version number to the deployed build (#23).
+- The shown version comes from `version.json`, precached with the build, so it changes together with the Update button.
 
 ## Environments
 - Local dev: `npm run dev` (wrangler dev)
 - Sandbox deploy: automatic on every push to `sandbox` (`.github/workflows/deploy.yml`, url: https://ghest-sandbox.whosane.workers.dev). By hand: `npm run deploy:sandbox`.
 - Production deploy: automatic on every push to `main`, i.e. the release PR (url: https://ghest.margani.dev). Never by hand; to redeploy the current `main`, re-run its Deploy PWA workflow run.
-- No version endpoint yet (#23): verify a deploy by comparing the live `/sw.js` with `www/sw.js` on the branch (it carries a hash of every file).
+- Verify a deploy with the version endpoint: the live `/version.json` must equal `www/version.json` on the branch (`build` is the hash of every file plus `versionName`).
 - The old production address https://ghest.whosane.workers.dev is off (`workers_dev: false` at the top level of `wrangler.jsonc`, 2026-10-09). The sandbox environment sets its own `workers_dev: true`; keep it, it is the sandbox's only address.
 
 ## Data safety
@@ -62,7 +62,7 @@
 - Owner: #2 test on your phone.
 - F-Droid review: #4 (1.0.7 recipe green and reproducible; waiting for an on-device test).
 - In sandbox, waiting for the next release: #15 theme setting.
-- After F-Droid release: #23 show the version.
+- In sandbox: #23 show the version.
 
 ## Lessons
 - 2026-10-10 (#15): On WebViews older than 140, Capacitor pads the page away from the system bars, so the bars show the window background, which follows the Android night mode, not the page. And once the app starts in a forced theme, the WebView's `prefers-color-scheme` keeps that start-up value. Theme handling therefore goes through `ThemePlugin.java` (night mode set in `attachBaseContext`, device dark mode reported to JS). Test theme changes on the emulator (it has WebView 124) with a release (R8) build.
