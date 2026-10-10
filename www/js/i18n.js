@@ -90,6 +90,9 @@ const S = {
     language: 'زبان',
     displayCalendar: 'تقویم نمایش',
     defaultCurrency: 'ارز پیش‌فرض',
+    theme: 'ظاهر',
+    themes: { system: 'خودکار', light: 'روشن', dark: 'تیره' },
+    themeToggle: { light: 'ظاهر روشن', dark: 'ظاهر تیره' },
     dflt: 'پیش‌فرض',
     backup: 'پشتیبان',
     backupHint: 'داده‌ها فقط روی همین گوشی‌ان. با حذف اپ یا پاک کردن داده‌هاش از بین می‌رن، پس گاهی خروجی بگیر.',
@@ -99,6 +102,7 @@ const S = {
     importBad: 'این فایل پشتیبان قسط نیست یا خرابه.',
     exportFailed: 'خروجی گرفتن نشد.',
     about: 'متن‌باز با مجوز GPL-3.0. بدون دسترسی به اینترنت.',
+    version: 'نسخه‌ی',
     backupHintWeb: 'داده‌ها فقط توی همین مرورگر روی همین دستگاه‌ان. پاک کردن داده‌های سایت یا مرورگر پاکشون می‌کنه، پس گاهی خروجی بگیر.',
     aboutWeb: 'متن‌باز با مجوز GPL-3.0. بعد از اولین بار بدون اینترنت کار می‌کنه و هیچ داده‌ای به جایی فرستاده نمی‌شه.',
     installTitle: 'نصب اپ',
@@ -188,6 +192,9 @@ const S = {
     language: 'Language',
     displayCalendar: 'Display calendar',
     defaultCurrency: 'Default currency',
+    theme: 'Theme',
+    themes: { system: 'System', light: 'Light', dark: 'Dark' },
+    themeToggle: { light: 'Light theme', dark: 'Dark theme' },
     dflt: 'Default',
     backup: 'Backup',
     backupHint: 'Your data lives only on this phone. Uninstalling or clearing app data deletes it, so export now and then.',
@@ -197,6 +204,7 @@ const S = {
     importBad: 'That file isn’t a Ghest backup, or it’s damaged.',
     exportFailed: 'Export failed.',
     about: 'Open source under GPL-3.0. No internet access.',
+    version: 'Version',
     backupHintWeb: 'Your data lives only in this browser on this device. Clearing site or browser data deletes it, so export now and then.',
     aboutWeb: 'Open source under GPL-3.0. Works offline after the first visit; nothing you enter is sent anywhere.',
     installTitle: 'Install',
@@ -296,5 +304,5 @@ export function guessDefaults(navLang = 'en') {
   const EURO = 'AT BE CY DE EE ES FI FR GR HR IE IT LT LU LV MT NL PT SI SK'.split(' ');
   const BY_REGION = { IR: 'IRT', GB: 'GBP', US: 'USD', CA: 'CAD', AU: 'AUD', TR: 'TRY', AE: 'AED', AF: 'AFN', SE: 'SEK', NO: 'NOK', DK: 'DKK', CH: 'CHF' };
   const currency = BY_REGION[region] || (EURO.includes(region) ? 'EUR' : lang === 'fa' ? 'IRT' : 'USD');
-  return { lang, displayCalendar: LANGS[lang].calendar, currency };
+  return { lang, displayCalendar: LANGS[lang].calendar, currency, theme: 'system' };
 }

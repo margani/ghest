@@ -16,6 +16,12 @@ export function initNav() {
     if (e.key === 'Escape' && stack.length) { e.preventDefault(); back(); }
   });
   document.addEventListener('click', e => { if (e.target.closest('[data-back]')) back(); });
+  // Android's Back (MainActivity.java): pop a page if one is open; false lets the app close.
+  window.ghestBack = () => {
+    if (!stack.length) return false;
+    back();
+    return true;
+  };
 }
 
 /** Slide `page` in on top of the current screen. Focus goes to `focusEl`, or the page title. */

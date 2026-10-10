@@ -2,6 +2,7 @@ import { CALENDARS, today, dayFromISO, isoFromDay, weekday } from './calendars.j
 import { FREQUENCIES, status, lumpSum, firstFromStart, firstFromRemaining } from './schedule.js';
 import { LANGS, makeI18n, currencies, parseNumber, guessDefaults } from './i18n.js';
 import { load, save, exportFile, parseImport } from './store.js';
+import { Capacitor, registerPlugin, SystemBars } from './vendor/capacitor-core.js';
 import { initNav, push, back, isOpen, depth } from './nav.js';
 import { initPwa, applyUpdate, isBrowser, standalone, iosManualInstall, canPromptInstall, promptInstall, requestPersistentStorage } from './pwa.js';
 
@@ -9,6 +10,13 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const CAL_ORDER = ['jalali', 'gregorian', 'hijri'];
 const YEAR_RANGE = { gregorian: [1900, 2200], jalali: [1280, 1580], hijri: [1320, 1590] };
+const THEME_ORDER = ['system', 'light', 'dark'];
+const THEME_BG = { light: '#EDF0F3', dark: '#121821' }; // --bg in app.css, for the browser's toolbar
+const deviceDark = matchMedia('(prefers-color-scheme: dark)');
+const NativeTheme = Capacitor.isNativePlatform() ? registerPlugin('Theme') : null; // ThemePlugin.java
+// Device dark mode. On Android it comes from ThemePlugin: after starting in a forced theme
+// the WebView's prefers-color-scheme stays at that value and no longer follows the device.
+let systemDark = deviceDark.matches;
 
 let doc;          // persisted document
 let I;            // i18n for current prefs
@@ -16,6 +24,7 @@ let todayN;       // today's day number, refreshed on every render
 let draft = null; // commitment being edited
 let detailId = null; // commitment shown on the details page
 let editorFromDetails = false; // whether Back from the editor lands on details
+let build = null; // www/version.json, served from the running service worker's cache
 
 // --- boot -----------------------------------------------------------------------
 
@@ -26,6 +35,12 @@ async function init() {
 
   $('addBtn').onclick = () => openEditor(null);
   $('settingsBtn').onclick = openSettings;
+  $('themeBtn').onclick = () => {
+    // Flip what is on screen; System becomes an explicit choice, as if picked in Settings.
+    doc.prefs.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    persist();
+    applyTheme();
+  };
   $('list').onclick = e => {
     const row = e.target.closest('[data-id]');
     if (row) openDetails(row.dataset.id);
@@ -40,6 +55,13 @@ async function init() {
   window.addEventListener('resize', fitTotals);
   document.fonts?.ready.then(fitTotals); // first fit may have measured the fallback font
   document.addEventListener('visibilitychange', () => { if (!document.hidden && today() !== todayN) render(); });
+  const onSystemTheme = dark => {
+    if (dark === systemDark) return;
+    systemDark = dark;
+    if (doc.prefs.theme === 'system') applyTheme();
+  };
+  if (NativeTheme) NativeTheme.addListener('systemTheme', ({ dark }) => onSystemTheme(dark));
+  else deviceDark.addEventListener('change', e => onSystemTheme(e.matches));
 
   initPwa({
     updateReady: () => { $('updateBtn').hidden = false; },
@@ -48,6 +70,23 @@ async function init() {
   $('updateBtn').onclick = applyUpdate;
 
   initNav();
+
+  // Stamped by scripts/build-sw.mjs; the service worker answers from the cache of the build
+  // that is running, so after Update the shown version changes with it.
+  fetch('version.json').then(r => r.json()).then(v => {
+    build = v;
+    if (isOpen($('settings'))) renderSettings();
+  }).catch(e => console.error('version.json', e));
+}
+
+/** "Version 1.0.7", plus where and which build outside production, so sandbox can't pass for it. */
+function versionHtml() {
+  if (!build) return '';
+  const host = location.hostname;
+  const env = host.startsWith('ghest-sandbox.') ? 'sandbox' : host === 'localhost' && isBrowser ? 'dev' : '';
+  const detail = [build.version, env, env && build.build.slice(0, 8)].filter(Boolean).join(' · ');
+  // Own LTR run: inside Persian text the bidi algorithm reordered "1.0.7 · dev · hash".
+  return `${esc(I.t.version)} <bdi dir="ltr">${esc(detail)}</bdi>`;
 }
 
 function applyPrefs() {
@@ -56,6 +95,26 @@ function applyPrefs() {
   root.lang = doc.prefs.lang;
   root.dir = I.dir;
   document.title = I.t.app;
+  applyTheme();
+}
+
+function applyTheme() {
+  const pref = doc.prefs.theme;
+  const theme = pref === 'system' ? (systemDark ? 'dark' : 'light') : pref;
+  document.documentElement.dataset.theme = theme;
+  $('themeBtn').setAttribute('aria-label', I.t.themeToggle[theme === 'dark' ? 'light' : 'dark']);
+  try { localStorage.setItem('ghest-theme', pref); } catch {} // read by theme.js on the next start
+  for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = THEME_BG[theme];
+  document.querySelector('meta[name=color-scheme]').content = theme;
+  if (NativeTheme) {
+    // The night mode gives the system bars the theme's background on WebViews older than 140.
+    NativeTheme.set({ theme: pref })
+      .then(({ dark }) => { if (dark !== systemDark) { systemDark = dark; if (pref === 'system') applyTheme(); } })
+      .catch(e => console.error('native theme', e));
+    // Icons: Capacitor's DEFAULT style did not follow the night mode change (white icons on
+    // the light bar on the emulator), so set them from the resolved theme.
+    SystemBars.setStyle({ style: theme.toUpperCase() }).catch(e => console.error('system bars', e));
+  }
 }
 
 function persist() {
@@ -437,6 +496,7 @@ function renderSettings() {
   $('settingsBody').innerHTML = `
     ${field('lang', t.language, seg('lang', [['fa', 'فارسی'], ['en', 'English']], doc.prefs.lang))}
     ${field('displayCalendar', t.displayCalendar, seg('displayCalendar', CAL_ORDER.map(c => [c, t.cal[c]]), doc.prefs.displayCalendar))}
+    ${field('theme', t.theme, seg('theme', THEME_ORDER.map(v => [v, t.themes[v]]), doc.prefs.theme))}
     ${field('currency', t.defaultCurrency, `<select name="currency">${currencyOptions(doc.prefs.currency, false)}</select>`)}
     <div class="group">
       <h2 style="font-size:16px;margin-top:14px">${t.backup}</h2>
@@ -451,7 +511,8 @@ function renderSettings() {
       <p class="hint">${canPromptInstall() ? t.installHint : t.installIos}</p>
       ${canPromptInstall() ? `<button type="button" class="primary wide" data-act="install">${t.installBtn}</button>` : ''}
     </div>` : ''}
-    <p class="about">${isBrowser ? t.aboutWeb : t.about}</p>`;
+    <p class="about">${isBrowser ? t.aboutWeb : t.about}</p>
+    <p class="about" id="versionLine">${versionHtml()}</p>`;
 }
 
 function openSettings() {
@@ -466,6 +527,7 @@ $('settingsBody').addEventListener('change', e => {
     doc.prefs.displayCalendar = LANGS[value].calendar;
   } else if (name === 'displayCalendar') doc.prefs.displayCalendar = value;
   else if (name === 'currency') doc.prefs.currency = value;
+  else if (name === 'theme') doc.prefs.theme = value;
   else return;
   persist();
   applyPrefs();

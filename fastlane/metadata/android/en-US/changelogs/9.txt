@@ -1,0 +1,3 @@
+- Theme setting: System, Light or Dark, plus a one-tap switch next to Settings.
+- Back now closes the open page instead of the app.
+- Settings shows the app version.

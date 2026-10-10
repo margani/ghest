@@ -9,3 +9,4 @@ android/keystore.properties
 *.jks
 *.keystore
 *.local.json
+.wrangler/

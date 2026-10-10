@@ -59,3 +59,15 @@ test('formatting: Persian digits for fa, Latin for en, toman, any ISO currency',
   assert.match(en.date(20730), /4 October 2026/);
   assert.match(makeI18n('fa', 'hijri').date(20730), /۱۴۴۸/);
 });
+
+test('theme preference: kept on import, missing reads as system, junk rejected', () => {
+  assert.equal(parseImport(JSON.stringify(valid())).prefs.theme, 'system'); // backups from before the setting
+  for (const theme of ['system', 'light', 'dark']) {
+    const d = valid();
+    d.prefs.theme = theme;
+    assert.equal(parseImport(JSON.stringify(d)).prefs.theme, theme);
+  }
+  const d = valid();
+  d.prefs.theme = 'sepia';
+  assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup: prefs/);
+});
