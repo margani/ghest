@@ -24,6 +24,7 @@ let todayN;       // today's day number, refreshed on every render
 let draft = null; // commitment being edited
 let detailId = null; // commitment shown on the details page
 let editorFromDetails = false; // whether Back from the editor lands on details
+let build = null; // www/version.json, served from the running service worker's cache
 
 // --- boot -----------------------------------------------------------------------
 
@@ -69,6 +70,23 @@ async function init() {
   $('updateBtn').onclick = applyUpdate;
 
   initNav();
+
+  // Stamped by scripts/build-sw.mjs; the service worker answers from the cache of the build
+  // that is running, so after Update the shown version changes with it.
+  fetch('version.json').then(r => r.json()).then(v => {
+    build = v;
+    if (isOpen($('settings'))) renderSettings();
+  }).catch(e => console.error('version.json', e));
+}
+
+/** "Version 1.0.7", plus where and which build outside production, so sandbox can't pass for it. */
+function versionHtml() {
+  if (!build) return '';
+  const host = location.hostname;
+  const env = host.startsWith('ghest-sandbox.') ? 'sandbox' : host === 'localhost' && isBrowser ? 'dev' : '';
+  const detail = [build.version, env, env && build.build.slice(0, 8)].filter(Boolean).join(' · ');
+  // Own LTR run: inside Persian text the bidi algorithm reordered "1.0.7 · dev · hash".
+  return `${esc(I.t.version)} <bdi dir="ltr">${esc(detail)}</bdi>`;
 }
 
 function applyPrefs() {
@@ -493,7 +511,8 @@ function renderSettings() {
       <p class="hint">${canPromptInstall() ? t.installHint : t.installIos}</p>
       ${canPromptInstall() ? `<button type="button" class="primary wide" data-act="install">${t.installBtn}</button>` : ''}
     </div>` : ''}
-    <p class="about">${isBrowser ? t.aboutWeb : t.about}</p>`;
+    <p class="about">${isBrowser ? t.aboutWeb : t.about}</p>
+    <p class="about" id="versionLine">${versionHtml()}</p>`;
 }
 
 function openSettings() {
