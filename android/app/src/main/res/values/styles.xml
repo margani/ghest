@@ -13,6 +13,8 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Shows behind the system bars on WebViews older than 140; same colour as the app background (bg in app.css). -->
+        <item name="android:windowBackground">@color/splash_bg</item>
     </style>
 
 

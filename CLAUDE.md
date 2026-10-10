@@ -59,6 +59,10 @@
 - Keep reviewer replies short.
 
 ## Open tasks
-- Owner: #2 test on your phone, #7 review the Persian copy.
+- Owner: #2 test on your phone.
 - F-Droid review: #4 (1.0.7 recipe green and reproducible; waiting for an on-device test).
-- After F-Droid release: #15 theme setting, #23 show the version.
+- In sandbox, waiting for the next release: #15 theme setting.
+- After F-Droid release: #23 show the version.
+
+## Lessons
+- 2026-10-10 (#15): On WebViews older than 140, Capacitor pads the page away from the system bars, so the bars show the window background, which follows the Android night mode, not the page. And once the app starts in a forced theme, the WebView's `prefers-color-scheme` keeps that start-up value. Theme handling therefore goes through `ThemePlugin.java` (night mode set in `attachBaseContext`, device dark mode reported to JS). Test theme changes on the emulator (it has WebView 124) with a release (R8) build.
