@@ -54,15 +54,12 @@
 - The release keystore is `~/keys/ghest-release.jks` (local only, never committed); signing values live in GitHub secrets.
 
 ## F-Droid
-- Merge request: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/51279. Recipe copy: `docs/fdroid/dev.margani.ghest.yml` (pinned to a full commit hash; reproducible build with `Binaries` + `AllowedAPKSigningKeys`).
-- Until it is merged, new features wait in the "After F-Droid release" milestone; problems are filed as issues.
+- Published through fdroiddata (merge request https://gitlab.com/fdroid/fdroiddata/-/merge_requests/51279, merged 2026-10-10). The recipe there (`metadata/dev.margani.ghest.yml`) is the source of truth; `docs/fdroid/dev.margani.ghest.yml` is the copy as merged.
+- New versions need no MR: `AutoUpdateMode: Version` + `UpdateCheckMode: Tags` make F-Droid build every `v*` tag. Its build must match the signed GitHub release byte for byte (`Binaries` + `AllowedAPKSigningKeys`), so keep builds reproducible and check F-Droid's build after a release.
 - Keep reviewer replies short.
 
 ## Open tasks
-- Owner: #2 test on your phone.
-- F-Droid review: #4 (1.0.7 recipe green and reproducible; waiting for an on-device test).
-- In sandbox, waiting for the next release: #15 theme setting.
-- In sandbox: #23 show the version.
+- Release 1.0.8 (#46): #15 theme setting, #41 theme toggle, #43 Android Back, #23 version in Settings; waiting for the owner's approval of the release PR.
 
 ## Lessons
 - 2026-10-10 (#15): On WebViews older than 140, Capacitor pads the page away from the system bars, so the bars show the window background, which follows the Android night mode, not the page. And once the app starts in a forced theme, the WebView's `prefers-color-scheme` keeps that start-up value. Theme handling therefore goes through `ThemePlugin.java` (night mode set in `attachBaseContext`, device dark mode reported to JS). Test theme changes on the emulator (it has WebView 124) with a release (R8) build.
