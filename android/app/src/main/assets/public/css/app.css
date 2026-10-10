@@ -36,6 +36,9 @@ button.icon {
 }
 button.icon svg { inline-size: 22px; block-size: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
 button.icon:active { background: var(--line) }
+.top-actions { display: flex; align-items: center }
+.top-actions button.icon:not(:last-child) { margin-inline-end: 0 }
+:root[data-theme=dark] #themeBtn .to-dark, :root:not([data-theme=dark]) #themeBtn .to-light { display: none }
 
 /* summary */
 h1 { font-size: 15px; font-weight: 500; color: var(--muted); margin: 4px 0 2px }
