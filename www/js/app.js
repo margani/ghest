@@ -34,6 +34,12 @@ async function init() {
 
   $('addBtn').onclick = () => openEditor(null);
   $('settingsBtn').onclick = openSettings;
+  $('themeBtn').onclick = () => {
+    // Flip what is on screen; System becomes an explicit choice, as if picked in Settings.
+    doc.prefs.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    persist();
+    applyTheme();
+  };
   $('list').onclick = e => {
     const row = e.target.closest('[data-id]');
     if (row) openDetails(row.dataset.id);
@@ -78,6 +84,7 @@ function applyTheme() {
   const pref = doc.prefs.theme;
   const theme = pref === 'system' ? (systemDark ? 'dark' : 'light') : pref;
   document.documentElement.dataset.theme = theme;
+  $('themeBtn').setAttribute('aria-label', I.t.themeToggle[theme === 'dark' ? 'light' : 'dark']);
   try { localStorage.setItem('ghest-theme', pref); } catch {} // read by theme.js on the next start
   for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = THEME_BG[theme];
   document.querySelector('meta[name=color-scheme]').content = theme;
