@@ -96,12 +96,13 @@ function validate(doc) {
     if (!ok) bad('payDay');
     if (!isInt(c.total, 1, 100000)) bad('total');
     if (c.apr != null && !(typeof c.apr === 'number' && c.apr >= 0 && c.apr < 1000)) bad('apr');
+    if (c.settleDays != null && !isInt(c.settleDays, 0, 365)) bad('settleDays');
     if (!isISO(c.first)) bad('first');
     return {
       id: c.id, name: c.name.trim(), amount: c.amount, currency: c.currency ?? null,
       frequency: c.frequency, calendar: c.calendar,
       payDay: c.frequency === 'yearly' ? { m: c.payDay.m, d: c.payDay.d } : c.payDay,
-      total: c.total, apr: c.apr || null, first: c.first,
+      total: c.total, apr: c.apr || null, settleDays: c.settleDays || 0, first: c.first,
     };
   });
   return {

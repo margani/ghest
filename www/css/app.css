@@ -75,6 +75,7 @@ h1 { font-size: 15px; font-weight: 500; color: var(--muted); margin: 4px 0 2px }
 .nums b { display: block; font-size: 15px; color: var(--ink); font-weight: 700; white-space: nowrap }
 .last { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--muted) }
 .last b { color: var(--ink); font-weight: 700 }
+.last .sub { display: block; margin-top: 4px; font-size: 12.5px }
 
 /* home: one compact row per commitment */
 .loan-row { display: block; inline-size: 100%; text-align: start; margin-bottom: 10px; padding: 14px 16px; cursor: pointer; font: inherit; color: inherit }

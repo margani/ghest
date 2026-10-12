@@ -2,7 +2,8 @@
 // Pure functions, no DOM: imported by the app and by test/.
 //
 // A commitment, as stored:
-//   { amount, frequency, calendar, payDay, total, apr, first }
+//   { amount, frequency, calendar, payDay, total, apr, settleDays, first }
+//   settleDays: extra days of interest a lender counts on early payoff (0 if none)
 //   frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'
 //   calendar:  'gregorian' | 'jalali' | 'hijri'  (only matters for monthly/yearly)
 //   payDay:    daily null | weekly 0–6 (0 = Sunday) | monthly 1–31 | yearly {m, d}
@@ -151,6 +152,26 @@ export function lumpSum(c, todayN, lump) {
     monthsCut: monthsBetween(c.frequency, periodsCut, newEnd, s.end),
     newEnd,
   };
+}
+
+/**
+ * What paying this commitment off costs if the lender settles `extraDays` after `todayN`.
+ * Follows the UK Consumer Credit (Early Settlement) Regulations 2004: instalments due by the
+ * settlement date are paid in full; the rest is the balance discounted at the APR, grown by
+ * (1 + r)^(days since the last instalment / days in that period), as in the Schedule's examples.
+ * Without this a lender's quote looked wrong: it is above "principal left" by these days (#50).
+ */
+export function payoff(c, todayN, extraDays = 0) {
+  const s = status(c, todayN);
+  if (s.done || !s.rate) return null;
+  const settle = todayN + extraDays;
+  const due = paidCount(c, settle); // payments made by the settlement date
+  let amount = (due - s.paid) * c.amount;
+  if (due < c.total) {
+    const prev = paymentDay(c, due - 1), next = paymentDay(c, due);
+    amount += presentValue(s.rate, c.total - due, c.amount) * Math.pow(1 + s.rate, (settle - prev) / (next - prev));
+  }
+  return { amount, saved: s.owed - amount };
 }
 
 function monthsBetween(frequency, periods, from, to) {
