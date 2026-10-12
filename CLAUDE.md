@@ -59,7 +59,7 @@
 - Keep reviewer replies short.
 
 ## Open tasks
-- Release 1.0.8 (#46): #15 theme setting, #41 theme toggle, #43 Android Back, #23 version in Settings; waiting for the owner's approval of the release PR.
+- F-Droid listing: the MR was merged after F-Droid's 2026-10-10 build cycle had started, so Ghest is built in the next cycle. When https://f-droid.org/packages/dev.margani.ghest/ is live, check that F-Droid's 1.0.8 matches the GitHub release, then link it from the README.
 
 ## Lessons
 - 2026-10-10 (#15): On WebViews older than 140, Capacitor pads the page away from the system bars, so the bars show the window background, which follows the Android night mode, not the page. And once the app starts in a forced theme, the WebView's `prefers-color-scheme` keeps that start-up value. Theme handling therefore goes through `ThemePlugin.java` (night mode set in `attachBaseContext`, device dark mode reported to JS). Test theme changes on the emulator (it has WebView 124) with a release (R8) build.
