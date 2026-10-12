@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CALENDARS, dayFromISO as D, isoFromDay as iso, weekday } from '../www/js/calendars.js';
 import {
-  firstFromStart, firstFromRemaining, paymentDay, paidCount, status, lumpSum, periodicRate, presentValue,
+  firstFromStart, firstFromRemaining, paymentDay, paidCount, status, lumpSum, payoff, periodicRate, presentValue,
 } from '../www/js/schedule.js';
 
 const dates = (c, n) => Array.from({ length: n }, (_, k) => iso(paymentDay(c, k)));
@@ -230,4 +230,62 @@ test('lump sum on a weekly commitment reports calendar months', () => {
   const r = lumpSum(c, todayN, 2600);
   assert.ok(r.periodsCut >= 26);
   assert.equal(r.monthsCut, Math.round((status(c, todayN).end - r.newEnd) / 30.436875));
+});
+
+// --- early payoff (UK Consumer Credit (Early Settlement) Regulations 2004) ---------
+
+// Schedule, example 1: £5,000 over 48 monthly payments of £134.57 at 14% APR,
+// settlement asked for right after the 12th instalment. Payment #0 is on 2024-10-01,
+// so #11 (the 12th) is 2025-09-01 and the next month is 30 days, as in the example.
+const ukExample = { amount: 134.57, frequency: 'monthly', calendar: 'gregorian', payDay: 1, total: 48, apr: 14, first: '2024-10-01' };
+
+// The example starts from the £5,000 advance, so its balance after the 12th instalment is
+// £3,984.00; the app only knows the instalment, rounded to £134.57, which gives £3,983.94.
+// So each step is checked against the example's own factors, and the advance-based balance
+// pins the rate.
+test('payoff: the example\'s rate and balance', () => {
+  const r = periodicRate(14, 'monthly');
+  near(r, 0.010979, 1e-6);
+  const fromAdvance = 5000 * (1 + r) ** 12 - Array.from({ length: 12 }, (_, j) => 134.57 * (1 + r) ** j).reduce((a, b) => a + b);
+  near(fromAdvance, 3984.00);
+  near(status(ukExample, D('2025-09-01')).principal, 3983.94);
+});
+
+test('payoff: regulation 4 example, settlement 28 days after the notice', () => {
+  const today = D('2025-09-01');
+  assert.equal(paidCount(ukExample, today), 12);
+  const principal = status(ukExample, today).principal;
+  const p = payoff(ukExample, today, 28);
+  near(p.amount, principal * 1.010979 ** (28 / 30)); // example: 3,984.00 × 1.010979^(28/30) = 4,024.81
+  near(p.saved, 36 * 134.57 - p.amount, 1e-9);
+});
+
+test('payoff: deferred one more month (regulation 6), instalment in between paid in full', () => {
+  // 58 days lands 28 days after the 13th instalment (2025-10-01); the 13th→14th month has 31 days,
+  // the example's N.B. case: balance after the 13th × 1.010979^(28/31), plus the 13th instalment.
+  const after13 = status(ukExample, D('2025-10-01')).principal;
+  near(after13, 3893.17 - 0.06); // example 3,893.17, same 6p as above
+  const p = payoff(ukExample, D('2025-09-01'), 58);
+  near(p.amount, 134.57 + after13 * 1.010979 ** (28 / 31));
+  near(p.saved, 35 * 134.57 - (p.amount - 134.57), 1e-9);
+});
+
+test('payoff: 0 extra days on a payment day is the principal left', () => {
+  const today = D('2025-09-01');
+  const p = payoff(ukExample, today, 0);
+  near(p.amount, status(ukExample, today).principal, 1e-6);
+});
+
+test('payoff: interest accrues between payments; none without APR or when finished', () => {
+  const mid = payoff(ukExample, D('2025-09-16'), 0).amount;
+  assert.ok(mid > status(ukExample, D('2025-09-16')).principal);
+  assert.equal(payoff({ ...ukExample, apr: null }, D('2025-09-01'), 0), null);
+  assert.equal(payoff(ukExample, D('2030-01-01'), 0), null);
+});
+
+test('payoff: days past the last payment leave nothing to discount', () => {
+  const lastButOne = paymentDay(ukExample, 46);
+  const p = payoff(ukExample, lastButOne, 60);
+  near(p.amount, 134.57);
+  near(p.saved, 0);
 });

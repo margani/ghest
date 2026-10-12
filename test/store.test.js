@@ -71,3 +71,14 @@ test('theme preference: kept on import, missing reads as system, junk rejected',
   d.prefs.theme = 'sepia';
   assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup: prefs/);
 });
+
+test('early payoff days: kept on import, missing reads as 0, junk rejected', () => {
+  assert.equal(parseImport(JSON.stringify(valid())).commitments[0].settleDays, 0); // backups from before the field
+  const d = valid();
+  d.commitments[0].settleDays = 58;
+  assert.equal(parseImport(JSON.stringify(d)).commitments[0].settleDays, 58);
+  for (const bad of [-1, 1.5, 366, '58']) {
+    d.commitments[0].settleDays = bad;
+    assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/, String(bad));
+  }
+});

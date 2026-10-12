@@ -1,5 +1,5 @@
 import { CALENDARS, today, dayFromISO, isoFromDay, weekday } from './calendars.js';
-import { FREQUENCIES, status, lumpSum, firstFromStart, firstFromRemaining } from './schedule.js';
+import { FREQUENCIES, status, lumpSum, payoff, firstFromStart, firstFromRemaining } from './schedule.js';
 import { LANGS, makeI18n, currencies, parseNumber, guessDefaults } from './i18n.js';
 import { load, save, exportFile, parseImport } from './store.js';
 import { Capacitor, registerPlugin, SystemBars } from './vendor/capacitor-core.js';
@@ -242,6 +242,7 @@ function renderDetail({ c, cur, s }, hot) {
         Array.from({ length: c.total }, (_, i) => `<i class="${i < s.paid ? 'p' : i === s.paid ? 'n' : ''}"></i>`).join('')}</div>`
     : `<div class="bar"><i style="inline-size:${(100 * s.paid) / c.total}%"></i></div>`;
   const rate = c.apr ? t.apr(num(c.apr, 2)) + (hot ? t.hottest : '') : t.noInterest;
+  const po = payoff(c, todayN, c.settleDays || 0);
 
   return `<p class="rate${hot ? ' hot' : ''}">${rate}</p>
     <div role="img" aria-label="${esc(t.progressLabel(num(s.paid), num(c.total)))}">${progress}</div>
@@ -256,6 +257,9 @@ function renderDetail({ c, cur, s }, hot) {
       <div><b>${monthYear(s.end)}</b>${t.end}</div>
     </div>
     <div class="last">${t.lastPaid}: <b>${s.lastPaid != null ? date(s.lastPaid) : t.nonePaid}</b></div>
+    ${po ? `<div class="last">${t.payoffNow}: <b><bdi>${money(po.amount, cur, true)}</bdi></b>${
+      // Own line, amount isolated: next to the payoff amount, RTL ran the two together and read as one.
+      po.saved > 0.005 ? `<small class="sub">${t.payoffSaves(`<bdi>${money(po.saved, cur, true)}</bdi>`)}</small>` : ''}</div>` : ''}
     <div class="actions"><button type="button" class="primary wide" data-act="edit">${t.edit}</button></div>`;
 }
 
@@ -316,10 +320,10 @@ function openEditor(id, fromDetails = false) {
   const cal = c ? c.calendar : doc.prefs.displayCalendar;
   const p = CALENDARS[cal].toParts(todayN);
   draft = c
-    ? { ...c, apr: c.apr ?? '', mode: 'remaining', remaining: status(c, todayN).remaining, startN: dayFromISO(c.first) }
+    ? { ...c, apr: c.apr ?? '', settleDays: c.settleDays || 0, mode: 'remaining', remaining: status(c, todayN).remaining, startN: dayFromISO(c.first) }
     : {
         id: null, name: '', amount: '', currency: null, frequency: 'monthly', calendar: cal,
-        payDay: p.d, total: '', apr: '', mode: 'start', remaining: '', startN: todayN,
+        payDay: p.d, total: '', apr: '', settleDays: 0, mode: 'start', remaining: '', startN: todayN,
       };
   draft.wd = draft.frequency === 'weekly' ? draft.payDay : weekday(todayN);
   draft.md = draft.frequency === 'monthly' ? draft.payDay : p.d;
@@ -370,6 +374,7 @@ function renderEditor(errors = {}) {
       ${field('apr', t.aprField, text('apr', n(d.apr)))}
     </div>
     <small class="hint row-hint">${esc(t.aprHint)}</small>
+    ${field('settleDays', t.settleDays, text('settleDays', n(d.settleDays), 'num', 'numeric'), t.settleDaysHint)}
     ${field('mode', t.mode, seg('mode', [['start', t.fromStart], ['remaining', t.fromRemaining]], d.mode))}
     ${when}
     <div class="actions save-bar">
@@ -396,6 +401,7 @@ function collect() {
   d.currency = val('currency') || null;
   d.total = numOr(val('total'));
   d.apr = numOr(val('apr'));
+  d.settleDays = numOr(val('settleDays'));
   if (f.wd) d.wd = +val('wd');
   if (f.md) d.md = numOr(val('md'));
   if (f.ydd) d.yd = { d: numOr(val('ydd')), m: +val('ydm') };
@@ -418,6 +424,7 @@ function validateDraft() {
   if (d.total === '') e.total = t.err.required;
   else if (!isInt(d.total, 1, 100000)) e.total = Number.isInteger(d.total) ? t.err.positive : t.err.integer;
   if (d.apr !== '' && !(d.apr >= 0 && d.apr < 1000)) e.apr = t.err.nonneg;
+  if (d.settleDays !== '' && !isInt(d.settleDays, 0, 365)) e.settleDays = t.err.range(num(0), num(365));
   if (d.frequency === 'monthly' && !isInt(d.md, 1, 31)) e.md = t.err.range(num(1), num(31));
   if (d.frequency === 'yearly' && !isInt(d.yd.d, 1, 31)) e.yd = t.err.range(num(1), num(31));
   if (d.mode === 'start' && d.startN == null) e.start = t.err.date;
@@ -466,6 +473,7 @@ function onEditorSubmit(e) {
     payDay: { daily: null, weekly: d.wd, monthly: d.md, yearly: d.yd }[d.frequency],
     total: d.total,
     apr: d.apr === '' || d.apr === 0 ? null : d.apr,
+    settleDays: d.settleDays || 0,
   };
   c.first = d.mode === 'start' ? firstFromStart(c, isoFromDay(d.startN)) : firstFromRemaining(c, d.remaining, todayN);
   const i = doc.commitments.findIndex(x => x.id === c.id);
