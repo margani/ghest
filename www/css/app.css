@@ -106,7 +106,7 @@ button:disabled { opacity: .5 }
 h2 { font-size: 18px; margin: 32px 0 4px }
 .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px }
 label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px }
-input[type=text], select {
+input[type=text], input[type=date], select {
   inline-size: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--bg); block-size: 46px; font-size: 16px;
 }
@@ -164,7 +164,7 @@ button.icon.back { margin: 0 }
 .appbar-title { margin: 0; font-size: 18px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .appbar-title:focus { outline: none }
 .page-body { display: block; max-width: 560px; margin: 0 auto; padding: 8px 16px calc(24px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) }
-.page input[type=text], .page select { background: var(--surface) }
+.page input[type=text], .page input[type=date], .page select { background: var(--surface) }
 /* The editor's Save bar stays pinned to the bottom of the page, clear of the system navigation bar. */
 .actions.save-bar {
   position: sticky; bottom: 0;

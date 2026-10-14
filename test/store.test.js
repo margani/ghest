@@ -99,3 +99,12 @@ test('amount borrowed and its date: kept together, missing reads as null, junk r
     assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/, `${borrowed} ${borrowedOn}`);
   }
 });
+
+test('count-from choice: kept on import, missing reads as remaining, junk rejected', () => {
+  assert.equal(parseImport(JSON.stringify(valid())).commitments[0].countFrom, 'remaining'); // older backups
+  const d = valid();
+  d.commitments[0].countFrom = 'start';
+  assert.equal(parseImport(JSON.stringify(d)).commitments[0].countFrom, 'start');
+  d.commitments[0].countFrom = 'end';
+  assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/);
+});

@@ -98,6 +98,7 @@ function validate(doc) {
     if (c.apr != null && !(typeof c.apr === 'number' && c.apr >= 0 && c.apr < 1000)) bad('apr');
     if (c.settleDays != null && !isInt(c.settleDays, 0, 365)) bad('settleDays');
     if (!isISO(c.first)) bad('first');
+    if (c.countFrom != null && !['start', 'remaining'].includes(c.countFrom)) bad('countFrom');
     // Both or neither: payoff() uses them only as a pair, and the payout can't follow the first payment.
     if ((c.borrowed ?? null) !== null || (c.borrowedOn ?? null) !== null) {
       if (typeof c.borrowed !== 'number' || !(c.borrowed > 0) || !isFinite(c.borrowed)) bad('borrowed');
@@ -108,7 +109,8 @@ function validate(doc) {
       frequency: c.frequency, calendar: c.calendar,
       payDay: c.frequency === 'yearly' ? { m: c.payDay.m, d: c.payDay.d } : c.payDay,
       total: c.total, apr: c.apr || null, settleDays: c.settleDays || 0,
-      borrowed: c.borrowed ?? null, borrowedOn: c.borrowedOn ?? null, first: c.first,
+      borrowed: c.borrowed ?? null, borrowedOn: c.borrowedOn ?? null,
+      countFrom: c.countFrom === 'start' ? 'start' : 'remaining', first: c.first,
     };
   });
   return {
