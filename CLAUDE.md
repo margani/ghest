@@ -56,10 +56,11 @@
 ## F-Droid
 - Published through fdroiddata (merge request https://gitlab.com/fdroid/fdroiddata/-/merge_requests/51279, merged 2026-10-10). The recipe there (`metadata/dev.margani.ghest.yml`) is the source of truth; `docs/fdroid/dev.margani.ghest.yml` is the copy as merged.
 - New versions need no MR: `AutoUpdateMode: Version` + `UpdateCheckMode: Tags` make F-Droid build every `v*` tag. Its build must match the signed GitHub release byte for byte (`Binaries` + `AllowedAPKSigningKeys`), so keep builds reproducible and check F-Droid's build after a release.
+- Listing: https://f-droid.org/packages/dev.margani.ghest/ (live since 1.0.8, 2026-10-14). Check a release: `sha256sum` of `https://f-droid.org/repo/dev.margani.ghest_<versionCode>.apk` must equal the GitHub release APK's.
 - Keep reviewer replies short.
 
 ## Open tasks
-- F-Droid listing: the MR was merged after F-Droid's 2026-10-10 build cycle had started, so Ghest is built in the next cycle. When https://f-droid.org/packages/dev.margani.ghest/ is live, check that F-Droid's 1.0.8 matches the GitHub release, then link it from the README.
+- None.
 
 ## Lessons
 - 2026-10-10 (#15): On WebViews older than 140, Capacitor pads the page away from the system bars, so the bars show the window background, which follows the Android night mode, not the page. And once the app starts in a forced theme, the WebView's `prefers-color-scheme` keeps that start-up value. Theme handling therefore goes through `ThemePlugin.java` (night mode set in `attachBaseContext`, device dark mode reported to JS). Test theme changes on the emulator (it has WebView 124) with a release (R8) build.
