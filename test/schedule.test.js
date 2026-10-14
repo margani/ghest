@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CALENDARS, dayFromISO as D, isoFromDay as iso, weekday } from '../www/js/calendars.js';
 import {
-  firstFromStart, firstFromRemaining, paymentDay, paidCount, status, lumpSum, payoff, periodicRate, presentValue,
+  firstFromStart, firstFromRemaining, paymentDay, paidCount, status, lumpSum, allocate, payoff, periodicRate, presentValue,
 } from '../www/js/schedule.js';
 
 const dates = (c, n) => Array.from({ length: n }, (_, k) => iso(paymentDay(c, k)));
@@ -313,4 +313,34 @@ test('payoff from the advance: an earlier payout adds its interest to the settle
 test('payoff from the advance: an instalment due before settlement is paid in full', () => {
   const p = payoff(ukAdvance, D('2025-09-01'), 58);
   near(p.amount, 134.57 + 3893.17 * 1.010979 ** (28 / 31)); // example's balance after the 13th
+});
+
+// Lump sum split across loans (#59): highest APR first, each gets up to its principal left,
+// the rest flows on to the next.
+test('allocate: highest APR first, the rest flows to the next', () => {
+  const today = D('2026-01-15');
+  const mk = (id, apr, amount, total) => ({ id, amount, frequency: 'monthly', calendar: 'gregorian', payDay: 1, total, apr, first: '2025-01-01' });
+  const cheap = mk('cheap', 5, 300, 48), dear = mk('dear', 20, 100, 24), mid = mk('mid', 10, 200, 36);
+  const p = c => status(c, today).principal;
+  const lump = p(dear) + 1000;
+  const a = allocate([cheap, dear, mid], today, lump);
+  assert.ok(a.rows.length === 3);
+  assert.deepEqual(a.rows.map(r => r.c.id), ['dear', 'mid', 'cheap']);
+  near(a.rows[0].give, p(dear), 1e-9);
+  assert.ok(a.rows[0].r.settles);
+  near(a.rows[1].give, 1000, 1e-9);
+  assert.equal(a.rows[2].give, 0);
+  assert.equal(a.rows[2].r, null);
+  near(a.left, 0, 1e-9);
+  near(a.saved, a.rows[0].r.saved + a.rows[1].r.saved, 1e-9);
+  near(a.rows[1].r.saved, lumpSum(mid, today, 1000).saved, 1e-9);
+});
+
+test('allocate: more than everything settles all and reports the rest', () => {
+  const today = D('2026-01-15');
+  const c = { amount: 100, frequency: 'monthly', calendar: 'gregorian', payDay: 1, total: 12, apr: 10, first: '2025-06-01' };
+  const a = allocate([c], today, 5000);
+  near(a.rows[0].give, status(c, today).principal, 1e-9);
+  near(a.left, 5000 - status(c, today).principal, 1e-9);
+  assert.deepEqual(allocate([], today, 100), { rows: [], left: 100, saved: 0 });
 });

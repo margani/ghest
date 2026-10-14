@@ -156,6 +156,27 @@ export function lumpSum(c, todayN, lump) {
 }
 
 /**
+ * Split `lump` across commitments: highest APR first (most interest saved per unit), each taking
+ * up to its principal left, the rest flowing on to the next. Commitments with no interest or
+ * already finished are left out. Asked for instead of "the whole sum on each one" (#59).
+ */
+export function allocate(cs, todayN, lump) {
+  const order = cs
+    .map(c => ({ c, s: status(c, todayN) }))
+    .filter(({ s }) => !s.done && s.rate)
+    .sort((a, b) => b.c.apr - a.c.apr || a.s.principal - b.s.principal);
+  let left = lump, saved = 0;
+  const rows = order.map(({ c, s }) => {
+    const give = Math.min(left, s.principal);
+    left -= give;
+    const r = give > 0 ? lumpSum(c, todayN, give) : null;
+    if (r) saved += r.saved;
+    return { c, give, r };
+  });
+  return { rows, left, saved };
+}
+
+/**
  * What paying this commitment off costs if the lender settles `extraDays` after `todayN`.
  * Follows the UK Consumer Credit (Early Settlement) Regulations 2004: instalments due by the
  * settlement date are paid in full; the rest is the balance discounted at the APR, grown by

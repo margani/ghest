@@ -123,6 +123,11 @@ input.num { direction: ltr; text-align: end }
 .opt:first-child { margin-top: 14px }
 .opt.best { background: var(--hotbg) }
 .opt .save { font-weight: 800; font-size: 17px; white-space: nowrap }
+label.opt { justify-content: flex-start; color: var(--ink); cursor: pointer; margin-bottom: 0 }
+label.opt .opt-name { flex: 1; min-width: 0 }
+label.opt input { inline-size: 20px; block-size: 20px; flex: none; accent-color: var(--paid); margin: 0 }
+.opt.off { opacity: .55 }
+.opt.total { border-top: 1px solid var(--line); border-radius: 0; margin-top: 10px; padding-top: 12px; font-weight: 700 }
 .opt small { display: block; color: var(--muted); font-size: 13px }
 .foot { color: var(--muted); font-size: 12.5px; margin-top: 22px }
 
