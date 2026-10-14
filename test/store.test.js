@@ -82,3 +82,20 @@ test('early payoff days: kept on import, missing reads as 0, junk rejected', () 
     assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/, String(bad));
   }
 });
+
+test('amount borrowed and its date: kept together, missing reads as null, junk rejected', () => {
+  const c0 = parseImport(JSON.stringify(valid())).commitments[0];
+  assert.equal(c0.borrowed, null);
+  assert.equal(c0.borrowedOn, null);
+  const d = valid();
+  const first = d.commitments[0].first;
+  Object.assign(d.commitments[0], { borrowed: 5000, borrowedOn: first });
+  const c = parseImport(JSON.stringify(d)).commitments[0];
+  assert.deepEqual([c.borrowed, c.borrowedOn], [5000, first]);
+  const dayAfter = new Date(Date.parse(`${first}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
+  for (const [borrowed, borrowedOn] of [[5000, null], [null, first], [0, first], [-5, first], ['5000', first],
+    [5000, '2024-02-30'], [5000, dayAfter]]) {
+    Object.assign(d.commitments[0], { borrowed, borrowedOn });
+    assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/, `${borrowed} ${borrowedOn}`);
+  }
+});

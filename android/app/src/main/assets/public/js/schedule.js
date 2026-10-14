@@ -2,8 +2,9 @@
 // Pure functions, no DOM: imported by the app and by test/.
 //
 // A commitment, as stored:
-//   { amount, frequency, calendar, payDay, total, apr, settleDays, first }
+//   { amount, frequency, calendar, payDay, total, apr, settleDays, borrowed, borrowedOn, first }
 //   settleDays: extra days of interest a lender counts on early payoff (0 if none)
+//   borrowed, borrowedOn: optional amount paid out and its ISO date (both or neither)
 //   frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'
 //   calendar:  'gregorian' | 'jalali' | 'hijri'  (only matters for monthly/yearly)
 //   payDay:    daily null | weekly 0–6 (0 = Sunday) | monthly 1–31 | yearly {m, d}
@@ -168,10 +169,27 @@ export function payoff(c, todayN, extraDays = 0) {
   const due = paidCount(c, settle); // payments made by the settlement date
   let amount = (due - s.paid) * c.amount;
   if (due < c.total) {
-    const prev = paymentDay(c, due - 1), next = paymentDay(c, due);
-    amount += presentValue(s.rate, c.total - due, c.amount) * Math.pow(1 + s.rate, (settle - prev) / (next - prev));
+    const at = periodsAt(c, settle);
+    const grow = periods => Math.pow(1 + s.rate, periods);
+    if (c.borrowed && c.borrowedOn) {
+      // The regulations start from the advance on its real date. Lenders often pay out more than
+      // a period before the first instalment, which was priced for exactly one, so rebuilding the
+      // balance from the instalments came out ~£79 under a real quote; this matched it to the penny (#54).
+      amount += c.borrowed * grow(at - periodsAt(c, dayFromISO(c.borrowedOn)));
+      for (let k = 0; k < due; k++) amount -= c.amount * grow(at - k);
+    } else {
+      amount += presentValue(s.rate, c.total - due, c.amount) * grow(at - (due - 1));
+    }
   }
   return { amount, saved: s.owed - amount };
+}
+
+/** Where day `x` falls on the payment grid, in periods from payment #0; part periods by days in that period. */
+function periodsAt(c, x) {
+  let k = paidCount(c, x) - 1; // last payment on or before x
+  if (k < 0) while (paymentDay(c, k) > x) k--;
+  const from = paymentDay(c, k);
+  return k + (x - from) / (paymentDay(c, k + 1) - from);
 }
 
 function monthsBetween(frequency, periods, from, to) {
