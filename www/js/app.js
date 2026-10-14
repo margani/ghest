@@ -1,5 +1,5 @@
 import { CALENDARS, today, dayFromISO, isoFromDay, weekday } from './calendars.js';
-import { FREQUENCIES, status, lumpSum, payoff, firstFromStart, firstFromRemaining } from './schedule.js';
+import { FREQUENCIES, status, allocate, payoff, firstFromStart, firstFromRemaining } from './schedule.js';
 import { LANGS, makeI18n, currencies, parseNumber, guessDefaults } from './i18n.js';
 import { load, save, exportFile, parseImport } from './store.js';
 import { Capacitor, registerPlugin, SystemBars } from './vendor/capacitor-core.js';
@@ -24,6 +24,7 @@ let draft = null; // commitment being edited
 let detailId = null; // commitment shown on the details page
 let editorFromDetails = false; // whether Back from the editor lands on details
 let build = null; // www/version.json, served from the running service worker's cache
+const lumpOff = new Set(); // loans unticked on the lump-sum page, for this session
 
 // --- boot -----------------------------------------------------------------------
 
@@ -51,6 +52,12 @@ async function init() {
   $('lumpBtn').onclick = () => push($('lumpPage'), $('lumpAmount'));
   $('lumpAmount').oninput = renderLump;
   $('lumpCurrency').onchange = renderLump;
+  $('lumpRes').onchange = e => {
+    const id = e.target.dataset.lump;
+    if (!id) return;
+    if (e.target.checked) lumpOff.delete(id); else lumpOff.add(id);
+    renderLump();
+  };
   $('importFile').onchange = onImport;
   window.addEventListener('resize', fitTotals);
   document.fonts?.ready.then(fitTotals); // first fit may have measured the fallback font
@@ -278,17 +285,28 @@ function renderLump() {
   sel.value = curs.includes(prev) ? prev : curs[0];
 
   const x = parseNumber($('lumpAmount').value);
-  if (!(x > 0)) { $('lumpRes').innerHTML = ''; return; }
   const cur = sel.value;
-  const opts = eligible
-    .filter(c => (c.currency || doc.prefs.currency) === cur)
-    .map(c => ({ c, r: lumpSum(c, todayN, x) }))
-    .sort((a, b) => b.r.saved - a.r.saved);
-  $('lumpRes').innerHTML = opts.map(({ c, r }, i) => `
-    <div class="opt${i === 0 && opts.length > 1 ? ' best' : ''}">
-      <div>${esc(c.name)}<small>${t.monthsSooner(r.monthsCut, I.num(r.monthsCut))}${r.settles ? t.settles : ''}</small></div>
-      <div class="save">${money(r.saved, cur)}</div>
-    </div>`).join('');
+  const mine = eligible.filter(c => (c.currency || doc.prefs.currency) === cur);
+  // Every loan is listed in paying order, unticked ones too so they can be ticked back.
+  const order = allocate(mine, todayN, 0).rows.map(r => r.c);
+  const a = allocate(mine.filter(c => !lumpOff.has(c.id)), todayN, x > 0 ? x : 0);
+  const got = new Map(a.rows.map(r => [r.c.id, r]));
+  const line = c => {
+    const g = got.get(c.id);
+    if (!g) return t.lumpOff;
+    if (!(x > 0)) return '';
+    if (!g.r) return t.lumpNone;
+    return `${t.lumpGive(`<bdi>${money(g.give, cur, true)}</bdi>`)}${t.lumpSep}${t.monthsSooner(g.r.monthsCut, I.num(g.r.monthsCut))}${g.r.settles ? t.settles : ''}`;
+  };
+  $('lumpRes').innerHTML = order.map(c => {
+    const g = got.get(c.id);
+    return `<label class="opt${g?.r ? ' best' : ''}${g ? '' : ' off'}">
+      <input type="checkbox" data-lump="${esc(c.id)}"${g ? ' checked' : ''}>
+      <div class="opt-name">${esc(c.name)}<small>${line(c)}</small></div>
+      <div class="save">${g?.r ? money(g.r.saved, cur) : ''}</div>
+    </label>`;
+  }).join('') + (x > 0 && a.rows.length ? `<div class="opt total"><div>${t.lumpTotal}${
+    a.left > 0.005 ? `<small>${t.lumpLeft(`<bdi>${money(a.left, cur, true)}</bdi>`)}</small>` : ''}</div><div class="save">${money(a.saved, cur)}</div></div>` : '');
 }
 
 // --- editor --------------------------------------------------------------------
