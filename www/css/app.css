@@ -113,6 +113,9 @@ input[type=text], select {
 input.big { font-size: 22px; font-weight: 700; block-size: auto; min-height: 56px }
 input.num { direction: ltr; text-align: end }
 [dir=rtl] input.num { text-align: right }
+/* Editor numbers are typed left to right, so they read and edit that way in both languages; a few
+   digits don't need the full width, which made the caret land far from the number (#56). */
+#editForm input.num { text-align: left; max-inline-size: 11rem }
 .lumpRow { display: flex; gap: 8px }
 .lumpRow select { inline-size: auto; flex: none }
 .opt { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; margin-top: 6px; font-size: 15px }
