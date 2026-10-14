@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseImport } from '../www/js/store.js';
 import { parseNumber, makeI18n } from '../www/js/i18n.js';
+import { dayFromISO } from '../www/js/calendars.js';
 
 const valid = () => ({
   app: 'ghest', version: 1,
@@ -119,4 +120,21 @@ test('extra repayments: kept on import, missing reads as none, junk rejected', (
     d.commitments[0].extra = bad;
     assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/, JSON.stringify(bad));
   }
+});
+
+test('month and year: month first in Persian Solar Hijri (#84)', () => {
+  const n = dayFromISO('2027-03-01'); // 10 Esfand 1405
+  assert.equal(makeI18n('fa', 'jalali').monthYear(n), 'اسفند ۱۴۰۵');
+  assert.equal(makeI18n('fa', 'gregorian').monthYear(n), 'مارس ۲۰۲۷');
+  assert.equal(makeI18n('en', 'gregorian').monthYear(n), 'March 2027');
+});
+
+test('a date can be shown in a given calendar, whatever the display calendar (#83)', () => {
+  const n = dayFromISO('2027-03-01');
+  const fa = makeI18n('fa', 'gregorian'), en = makeI18n('en', 'gregorian');
+  assert.equal(fa.date(n, 'jalali'), '۱۰ اسفند ۱۴۰۵');
+  assert.equal(fa.monthYear(n, 'jalali'), 'اسفند ۱۴۰۵');
+  assert.equal(fa.date(n), '۱ مارس ۲۰۲۷');
+  assert.equal(en.date(n, 'jalali'), '10 Esfand 1405'); // no "AP"
+  assert.equal(en.monthYear(n, 'jalali'), 'Esfand 1405');
 });
