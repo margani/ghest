@@ -108,3 +108,15 @@ test('count-from choice: kept on import, missing reads as remaining, junk reject
   d.commitments[0].countFrom = 'end';
   assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/);
 });
+
+test('extra repayments: kept on import, missing reads as none, junk rejected', () => {
+  assert.deepEqual(parseImport(JSON.stringify(valid())).commitments[0].extra, []);
+  const d = valid();
+  d.commitments[0].extra = [{ on: '2025-01-20', amount: 500, effect: 'term' }];
+  assert.deepEqual(parseImport(JSON.stringify(d)).commitments[0].extra, [{ on: '2025-01-20', amount: 500, effect: 'term' }]);
+  for (const bad of ['x', [{ on: '2025-02-30', amount: 5, effect: 'term' }], [{ on: '2025-01-20', amount: 0, effect: 'term' }],
+    [{ on: '2025-01-20', amount: 5, effect: 'both' }], [null]]) {
+    d.commitments[0].extra = bad;
+    assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/, JSON.stringify(bad));
+  }
+});

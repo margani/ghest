@@ -9,6 +9,8 @@
 //   calendar:  'gregorian' | 'jalali' | 'hijri'  (only matters for monthly/yearly)
 //   payDay:    daily null | weekly 0–6 (0 = Sunday) | monthly 1–31 | yearly {m, d}
 //   first:     ISO date of payment #0 (always Gregorian ISO)
+//   extra:     optional repayments outside the instalments, [{ on: ISO, amount, effect }];
+//              effect 'term' keeps the instalment and ends sooner, 'payment' keeps the end and lowers it
 //
 // Every date is derived from `first` and an index, never by stepping from the
 // previous payment, so month-end clamping cannot drift (31 Jan → 28 Feb → 31 Mar).
@@ -114,6 +116,7 @@ function simulate(b, r, p) {
 
 /** Everything the UI shows for one commitment on `todayN`. */
 export function status(c, todayN) {
+  if (c.extra?.length) return ledgerStatus(c, todayN);
   const paid = paidCount(c, todayN);
   const remaining = c.total - paid;
   const r = periodicRate(c.apr, c.frequency);
@@ -121,6 +124,8 @@ export function status(c, todayN) {
   return {
     paid,
     remaining,
+    total: c.total,
+    amount: c.amount,
     done: remaining === 0,
     rate: r,
     principal,
@@ -133,6 +138,91 @@ export function status(c, todayN) {
   };
 }
 
+/** Instalment that clears `bal` in `n` payments, the first one period away. */
+function annuity(r, n, bal) {
+  return r ? (bal * r) / (1 - Math.pow(1 + r, -n)) : bal / n;
+}
+
+/** Payments of `amt` (the last one smaller) that clear `bal`, the first one period away. */
+function nper(r, bal, amt) {
+  const x = r ? 1 - (bal * r) / amt : 1;
+  if (x <= 0) return Infinity;
+  return Math.max(1, Math.ceil((r ? -Math.log(x) / Math.log(1 + r) : bal / amt) - 1e-9));
+}
+
+/**
+ * The loan as a ledger, for commitments with extra repayments (#75): the advance on its date (or,
+ * without one, the schedule's value one period before payment #0), interest at the periodic rate
+ * on the payment grid, and every instalment and extra repayment taken off in date order. An extra
+ * on an instalment's day counts after it. Instalment and count change as each extra's `effect` says;
+ * the last instalment clears what is left. Returns every event with the balance after it.
+ */
+export function ledger(c) {
+  const r = periodicRate(c.apr, c.frequency);
+  const extras = (c.extra || []).map((e, i) => ({ ...e, i, day: dayFromISO(e.on) })).sort((a, b) => a.day - b.day || a.i - b.i);
+  let pos = -1, bal = presentValue(r, c.total, c.amount);
+  if (c.borrowed && c.borrowedOn) { pos = periodsAt(c, dayFromISO(c.borrowedOn)); bal = c.borrowed; }
+  const start = { pos, balance: bal };
+  let amt = c.amount, n = c.total, ei = 0;
+  const events = [];
+  const grow = to => { bal *= Math.pow(1 + r, to - pos); pos = to; };
+  for (let k = 0; k < n; k++) {
+    const day = paymentDay(c, k);
+    for (; ei < extras.length && extras[ei].day < day; ei++) {
+      const e = extras[ei];
+      grow(periodsAt(c, e.day));
+      bal = Math.max(0, bal - e.amount);
+      events.push({ day: e.day, amount: e.amount, extra: e.i, effect: e.effect, balance: bal });
+      if (bal <= 1e-6) { n = k; break; }
+      const atStart = bal / Math.pow(1 + r, pos - (k - 1)); // as if one period before instalment k
+      if (e.effect === 'payment') amt = annuity(r, n - k, atStart);
+      else n = k + nper(r, atStart, amt);
+    }
+    if (k >= n) break;
+    grow(k);
+    const pay = k === n - 1 ? bal : Math.min(amt, bal);
+    bal -= pay;
+    events.push({ day, amount: pay, k, balance: bal });
+  }
+  // Extras after the last instalment change nothing left to pay, but still belong in the list.
+  for (; ei < extras.length; ei++) events.push({ day: extras[ei].day, amount: extras[ei].amount, extra: extras[ei].i, effect: extras[ei].effect, balance: 0 });
+  return { events, n, amt, rate: r, start };
+}
+
+function ledgerStatus(c, todayN) {
+  const { events, n, amt, rate, start: ledgerStart } = ledger(c);
+  const past = events.filter(e => e.day <= todayN);
+  const due = events.filter(e => e.day > todayN && e.k != null);
+  const paid = past.filter(e => e.k != null).length;
+  const remaining = due.length;
+  const owed = due.reduce((a, e) => a + e.amount, 0);
+  const principal = remaining ? (past.length ? past[past.length - 1].balance : ledgerStart.balance) : 0;
+  const lastK = events.filter(e => e.k != null).pop();
+  return {
+    paid,
+    remaining,
+    total: n,
+    amount: amt,
+    done: remaining === 0,
+    rate,
+    principal,
+    interest: owed - principal,
+    owed,
+    lastPaid: paid > 0 ? paymentDay(c, paid - 1) : null,
+    next: remaining > 0 ? due[0].day : null,
+    end: lastK ? lastK.day : (past.length ? past[past.length - 1].day : paymentDay(c, 0)),
+    monthly: remaining > 0 ? (amt * PER_YEAR[c.frequency]) / 12 : 0,
+  };
+}
+
+/** Payments made by `todayN`, newest first: instalments (automatic) and extra repayments (`extra` = its index). */
+export function payments(c, todayN) {
+  const events = c.extra?.length
+    ? ledger(c).events
+    : Array.from({ length: paidCount(c, todayN) }, (_, k) => ({ day: paymentDay(c, k), amount: c.amount, k }));
+  return events.filter(e => e.day <= todayN).reverse();
+}
+
 /**
  * Effect of paying `lump` off this commitment today, keeping the payment fixed
  * and shortening the term. Returns null if the commitment has no interest left.
@@ -141,8 +231,8 @@ export function lumpSum(c, todayN, lump) {
   const s = status(c, todayN);
   if (s.done || !s.rate) return null;
   const applied = Math.min(lump, s.principal);
-  const before = simulate(s.principal, s.rate, c.amount);
-  const after = simulate(s.principal - applied, s.rate, c.amount);
+  const before = simulate(s.principal, s.rate, s.amount);
+  const after = simulate(s.principal - applied, s.rate, s.amount);
   const periodsCut = before.periods - after.periods;
   const newEnd = after.periods > 0 ? paymentDay(c, s.paid + after.periods - 1) : todayN;
   return {
@@ -187,6 +277,22 @@ export function payoff(c, todayN, extraDays = 0) {
   const s = status(c, todayN);
   if (s.done || !s.rate) return null;
   const settle = todayN + extraDays;
+  if (c.extra?.length) {
+    // Instalments due by the settlement date in full, then the ledger's balance grown to that date.
+    const { events, start } = ledger(c);
+    let amount = 0, last = null;
+    for (const e of events) {
+      if (e.day > settle) break;
+      if (e.day > todayN && e.k != null) amount += e.amount;
+      last = e;
+    }
+    const open = events.some(e => e.day > settle && e.k != null);
+    if (open) {
+      const [from, bal] = !last ? [start.pos, start.balance] : [last.k != null ? last.k : periodsAt(c, last.day), last.balance];
+      amount += bal * Math.pow(1 + s.rate, periodsAt(c, settle) - from);
+    }
+    return { amount, saved: s.owed - amount };
+  }
   const due = paidCount(c, settle); // payments made by the settlement date
   let amount = (due - s.paid) * c.amount;
   if (due < c.total) {

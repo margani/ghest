@@ -99,6 +99,10 @@ function validate(doc) {
     if (c.settleDays != null && !isInt(c.settleDays, 0, 365)) bad('settleDays');
     if (!isISO(c.first)) bad('first');
     if (c.countFrom != null && !['start', 'remaining'].includes(c.countFrom)) bad('countFrom');
+    // Extra repayments (#75): a list of {on, amount, effect}. Their dates are not checked against the
+    // loan's: editing the loan can move its first payment, and a failed check here loses all stored data.
+    if (c.extra != null && (!Array.isArray(c.extra) || c.extra.some(e => !e || !isISO(e.on)
+      || typeof e.amount !== 'number' || !(e.amount > 0) || !isFinite(e.amount) || !['term', 'payment'].includes(e.effect)))) bad('extra');
     // Both or neither: payoff() uses them only as a pair, and the payout can't follow the first payment.
     if ((c.borrowed ?? null) !== null || (c.borrowedOn ?? null) !== null) {
       if (typeof c.borrowed !== 'number' || !(c.borrowed > 0) || !isFinite(c.borrowed)) bad('borrowed');
@@ -111,6 +115,7 @@ function validate(doc) {
       total: c.total, apr: c.apr || null, settleDays: c.settleDays || 0,
       borrowed: c.borrowed ?? null, borrowedOn: c.borrowedOn ?? null,
       countFrom: c.countFrom === 'start' ? 'start' : 'remaining', first: c.first,
+      extra: (c.extra || []).map(e => ({ on: e.on, amount: e.amount, effect: e.effect })),
     };
   });
   return {
