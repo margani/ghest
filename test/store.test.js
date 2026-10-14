@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseImport } from '../www/js/store.js';
 import { parseNumber, makeI18n } from '../www/js/i18n.js';
+import { dayFromISO } from '../www/js/calendars.js';
 
 const valid = () => ({
   app: 'ghest', version: 1,
@@ -70,4 +71,70 @@ test('theme preference: kept on import, missing reads as system, junk rejected',
   const d = valid();
   d.prefs.theme = 'sepia';
   assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup: prefs/);
+});
+
+test('early payoff days: kept on import, missing reads as 0, junk rejected', () => {
+  assert.equal(parseImport(JSON.stringify(valid())).commitments[0].settleDays, 0); // backups from before the field
+  const d = valid();
+  d.commitments[0].settleDays = 58;
+  assert.equal(parseImport(JSON.stringify(d)).commitments[0].settleDays, 58);
+  for (const bad of [-1, 1.5, 366, '58']) {
+    d.commitments[0].settleDays = bad;
+    assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/, String(bad));
+  }
+});
+
+test('amount borrowed and its date: kept together, missing reads as null, junk rejected', () => {
+  const c0 = parseImport(JSON.stringify(valid())).commitments[0];
+  assert.equal(c0.borrowed, null);
+  assert.equal(c0.borrowedOn, null);
+  const d = valid();
+  const first = d.commitments[0].first;
+  Object.assign(d.commitments[0], { borrowed: 5000, borrowedOn: first });
+  const c = parseImport(JSON.stringify(d)).commitments[0];
+  assert.deepEqual([c.borrowed, c.borrowedOn], [5000, first]);
+  const dayAfter = new Date(Date.parse(`${first}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
+  for (const [borrowed, borrowedOn] of [[5000, null], [null, first], [0, first], [-5, first], ['5000', first],
+    [5000, '2024-02-30'], [5000, dayAfter]]) {
+    Object.assign(d.commitments[0], { borrowed, borrowedOn });
+    assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/, `${borrowed} ${borrowedOn}`);
+  }
+});
+
+test('count-from choice: kept on import, missing reads as remaining, junk rejected', () => {
+  assert.equal(parseImport(JSON.stringify(valid())).commitments[0].countFrom, 'remaining'); // older backups
+  const d = valid();
+  d.commitments[0].countFrom = 'start';
+  assert.equal(parseImport(JSON.stringify(d)).commitments[0].countFrom, 'start');
+  d.commitments[0].countFrom = 'end';
+  assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/);
+});
+
+test('extra repayments: kept on import, missing reads as none, junk rejected', () => {
+  assert.deepEqual(parseImport(JSON.stringify(valid())).commitments[0].extra, []);
+  const d = valid();
+  d.commitments[0].extra = [{ on: '2025-01-20', amount: 500, effect: 'term' }];
+  assert.deepEqual(parseImport(JSON.stringify(d)).commitments[0].extra, [{ on: '2025-01-20', amount: 500, effect: 'term' }]);
+  for (const bad of ['x', [{ on: '2025-02-30', amount: 5, effect: 'term' }], [{ on: '2025-01-20', amount: 0, effect: 'term' }],
+    [{ on: '2025-01-20', amount: 5, effect: 'both' }], [null]]) {
+    d.commitments[0].extra = bad;
+    assert.throws(() => parseImport(JSON.stringify(d)), /invalid backup/, JSON.stringify(bad));
+  }
+});
+
+test('month and year: month first in Persian Solar Hijri (#84)', () => {
+  const n = dayFromISO('2027-03-01'); // 10 Esfand 1405
+  assert.equal(makeI18n('fa', 'jalali').monthYear(n), 'اسفند ۱۴۰۵');
+  assert.equal(makeI18n('fa', 'gregorian').monthYear(n), 'مارس ۲۰۲۷');
+  assert.equal(makeI18n('en', 'gregorian').monthYear(n), 'March 2027');
+});
+
+test('a date can be shown in a given calendar, whatever the display calendar (#83)', () => {
+  const n = dayFromISO('2027-03-01');
+  const fa = makeI18n('fa', 'gregorian'), en = makeI18n('en', 'gregorian');
+  assert.equal(fa.date(n, 'jalali'), '۱۰ اسفند ۱۴۰۵');
+  assert.equal(fa.monthYear(n, 'jalali'), 'اسفند ۱۴۰۵');
+  assert.equal(fa.date(n), '۱ مارس ۲۰۲۷');
+  assert.equal(en.date(n, 'jalali'), '10 Esfand 1405'); // no "AP"
+  assert.equal(en.monthYear(n, 'jalali'), 'Esfand 1405');
 });

@@ -56,11 +56,13 @@
 ## F-Droid
 - Published through fdroiddata (merge request https://gitlab.com/fdroid/fdroiddata/-/merge_requests/51279, merged 2026-10-10). The recipe there (`metadata/dev.margani.ghest.yml`) is the source of truth; `docs/fdroid/dev.margani.ghest.yml` is the copy as merged.
 - New versions need no MR: `AutoUpdateMode: Version` + `UpdateCheckMode: Tags` make F-Droid build every `v*` tag. Its build must match the signed GitHub release byte for byte (`Binaries` + `AllowedAPKSigningKeys`), so keep builds reproducible and check F-Droid's build after a release.
+- Listing: https://f-droid.org/packages/dev.margani.ghest/ (live since 1.0.8, 2026-10-14). Check a release: `sha256sum` of `https://f-droid.org/repo/dev.margani.ghest_<versionCode>.apk` must equal the GitHub release APK's.
 - Keep reviewer replies short.
 
 ## Open tasks
-- Release 1.0.8 (#46): #15 theme setting, #41 theme toggle, #43 Android Back, #23 version in Settings; waiting for the owner's approval of the release PR.
+- None.
 
 ## Lessons
 - 2026-10-10 (#15): On WebViews older than 140, Capacitor pads the page away from the system bars, so the bars show the window background, which follows the Android night mode, not the page. And once the app starts in a forced theme, the WebView's `prefers-color-scheme` keeps that start-up value. Theme handling therefore goes through `ThemePlugin.java` (night mode set in `attachBaseContext`, device dark mode reported to JS). Test theme changes on the emulator (it has WebView 124) with a release (R8) build.
 - 2026-10-10 (#43): Android Back closed the app from any page: Capacitor has no back handling without `@capacitor/app`. `MainActivity` now asks `nav.js` (`window.ghestBack()`) to pop a page. Don't use `WebView.canGoBack()`: Chromium skips history entries added without a user gesture, so it said false with a page open. Test Back on the emulator (`adb shell input keyevent KEYCODE_BACK`), with Android data seeded through `Capacitor.Plugins.Preferences`, not localStorage.
+- 2026-10-14 (#67): A PR was merged with a red CI run because `gh pr checks N --watch | tail -1 && gh pr merge …` took `tail`'s exit code. Gate the merge on the watch itself (`gh pr checks N --watch --fail-fast >/dev/null && gh pr merge …`, no pipe). The red run was Maven Central answering 403 to the runner (an outage, not the code); a re-run passed.

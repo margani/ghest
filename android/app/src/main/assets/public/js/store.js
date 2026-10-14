@@ -96,12 +96,26 @@ function validate(doc) {
     if (!ok) bad('payDay');
     if (!isInt(c.total, 1, 100000)) bad('total');
     if (c.apr != null && !(typeof c.apr === 'number' && c.apr >= 0 && c.apr < 1000)) bad('apr');
+    if (c.settleDays != null && !isInt(c.settleDays, 0, 365)) bad('settleDays');
     if (!isISO(c.first)) bad('first');
+    if (c.countFrom != null && !['start', 'remaining'].includes(c.countFrom)) bad('countFrom');
+    // Extra repayments (#75): a list of {on, amount, effect}. Their dates are not checked against the
+    // loan's: editing the loan can move its first payment, and a failed check here loses all stored data.
+    if (c.extra != null && (!Array.isArray(c.extra) || c.extra.some(e => !e || !isISO(e.on)
+      || typeof e.amount !== 'number' || !(e.amount > 0) || !isFinite(e.amount) || !['term', 'payment'].includes(e.effect)))) bad('extra');
+    // Both or neither: payoff() uses them only as a pair, and the payout can't follow the first payment.
+    if ((c.borrowed ?? null) !== null || (c.borrowedOn ?? null) !== null) {
+      if (typeof c.borrowed !== 'number' || !(c.borrowed > 0) || !isFinite(c.borrowed)) bad('borrowed');
+      if (!isISO(c.borrowedOn) || c.borrowedOn > c.first) bad('borrowedOn');
+    }
     return {
       id: c.id, name: c.name.trim(), amount: c.amount, currency: c.currency ?? null,
       frequency: c.frequency, calendar: c.calendar,
       payDay: c.frequency === 'yearly' ? { m: c.payDay.m, d: c.payDay.d } : c.payDay,
-      total: c.total, apr: c.apr || null, first: c.first,
+      total: c.total, apr: c.apr || null, settleDays: c.settleDays || 0,
+      borrowed: c.borrowed ?? null, borrowedOn: c.borrowedOn ?? null,
+      countFrom: c.countFrom === 'start' ? 'start' : 'remaining', first: c.first,
+      extra: (c.extra || []).map(e => ({ on: e.on, amount: e.amount, effect: e.effect })),
     };
   });
   return {

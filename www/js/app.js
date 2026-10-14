@@ -1,16 +1,15 @@
 import { CALENDARS, today, dayFromISO, isoFromDay, weekday } from './calendars.js';
-import { FREQUENCIES, status, lumpSum, firstFromStart, firstFromRemaining } from './schedule.js';
+import { FREQUENCIES, status, allocate, payoff, payments, firstFromStart, firstFromRemaining } from './schedule.js';
 import { LANGS, makeI18n, currencies, parseNumber, guessDefaults } from './i18n.js';
 import { load, save, exportFile, parseImport } from './store.js';
 import { Capacitor, registerPlugin, SystemBars } from './vendor/capacitor-core.js';
 import { initNav, push, back, isOpen, depth } from './nav.js';
-import { initPwa, applyUpdate, isBrowser, standalone, iosManualInstall, canPromptInstall, promptInstall, requestPersistentStorage } from './pwa.js';
+import { initPwa, applyUpdate, isBrowser, iosManualInstall, canPromptInstall, promptInstall, requestPersistentStorage } from './pwa.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const CAL_ORDER = ['jalali', 'gregorian', 'hijri'];
 const YEAR_RANGE = { gregorian: [1900, 2200], jalali: [1280, 1580], hijri: [1320, 1590] };
-const THEME_ORDER = ['system', 'light', 'dark'];
 const THEME_BG = { light: '#EDF0F3', dark: '#121821' }; // --bg in app.css, for the browser's toolbar
 const deviceDark = matchMedia('(prefers-color-scheme: dark)');
 const NativeTheme = Capacitor.isNativePlatform() ? registerPlugin('Theme') : null; // ThemePlugin.java
@@ -25,6 +24,7 @@ let draft = null; // commitment being edited
 let detailId = null; // commitment shown on the details page
 let editorFromDetails = false; // whether Back from the editor lands on details
 let build = null; // www/version.json, served from the running service worker's cache
+const lumpOff = new Set(); // loans unticked on the lump-sum page, for this session
 
 // --- boot -----------------------------------------------------------------------
 
@@ -34,6 +34,7 @@ async function init() {
   render();
 
   $('addBtn').onclick = () => openEditor(null);
+  $('installBtn').onclick = promptInstall;
   $('settingsBtn').onclick = openSettings;
   $('themeBtn').onclick = () => {
     // Flip what is on screen; System becomes an explicit choice, as if picked in Settings.
@@ -46,11 +47,37 @@ async function init() {
     if (row) openDetails(row.dataset.id);
   };
   $('detailsBody').onclick = e => {
-    if (e.target.closest('[data-act=edit]')) openEditor(detailId, true);
+    const act = e.target.closest('[data-act]');
+    if (!act) return;
+    if (act.dataset.act === 'all-pays') { allPays = true; renderDetails(); }
+    if (act.dataset.act === 'del-extra') {
+      const c = doc.commitments.find(x => x.id === detailId);
+      const x = c.extra[+act.dataset.i];
+      const cur = c.currency || doc.prefs.currency;
+      if (!confirm(I.t.confirmDelExtra(I.money(x.amount, cur, true), I.date(dayFromISO(x.on), c.calendar)))) return;
+      c.extra = c.extra.filter((_, i) => i !== +act.dataset.i);
+      persist();
+      render();
+    }
   };
+  $('repayForm').addEventListener('submit', onRepaySubmit);
+  // A stale "Required" under the amount pushed the date beside it down after typing.
+  $('repayForm').addEventListener('input', e => {
+    const f = e.target.closest('.field.invalid');
+    if (f) { f.classList.remove('invalid'); f.querySelector('.err')?.remove(); }
+  });
   $('lumpBtn').onclick = () => push($('lumpPage'), $('lumpAmount'));
+  // Icons at the top of the details page (#78), not buttons under a long payments list.
+  $('editBtn').onclick = () => openEditor(detailId, true);
+  $('repayBtn').onclick = () => openRepay();
   $('lumpAmount').oninput = renderLump;
   $('lumpCurrency').onchange = renderLump;
+  $('lumpRes').onchange = e => {
+    const id = e.target.dataset.lump;
+    if (!id) return;
+    if (e.target.checked) lumpOff.delete(id); else lumpOff.add(id);
+    renderLump();
+  };
   $('importFile').onchange = onImport;
   window.addEventListener('resize', fitTotals);
   document.fonts?.ready.then(fitTotals); // first fit may have measured the fallback font
@@ -65,7 +92,7 @@ async function init() {
 
   initPwa({
     updateReady: () => { $('updateBtn').hidden = false; },
-    installChanged: () => { if (isOpen($('settings'))) renderSettings(); },
+    installChanged: () => { $('installBtn').hidden = !canPromptInstall(); },
   });
   $('updateBtn').onclick = applyUpdate;
 
@@ -133,10 +160,14 @@ function render() {
   const { t } = I;
   $('brand').textContent = t.app;
   $('settingsBtn').setAttribute('aria-label', t.settings);
-  $('addBtn').textContent = t.add;
+  $('addBtn').setAttribute('aria-label', t.add);
+  $('installBtn').setAttribute('aria-label', t.installBtn);
   $('updateBtn').textContent = t.updateBtn;
   $('foot').textContent = doc.commitments.length ? t.foot : '';
-  $('lumpBtn').textContent = t.lumpTitle;
+  for (const [id, label] of [['lumpBtn', t.lumpTitle], ['editBtn', t.edit], ['repayBtn', t.addRepay]]) {
+    $(id).setAttribute('aria-label', label);
+    $(id).title = label;
+  }
   setTitle('lumpPage', t.lumpTitle);
   setTitle('settings', t.settings);
   for (const b of document.querySelectorAll('[data-back]')) b.setAttribute('aria-label', t.back);
@@ -177,9 +208,11 @@ function renderSummary(rows) {
 
   const totals = order.map((cur, i) => {
     const g = groups.get(cur);
+    // Headline is every remaining payment, interest included: that is the figure banks call the
+    // balance left, and leading with the principal read as the app disagreeing with them (#73).
     const interest = g.interest >= 0.5 ? money(g.interest, cur) : '';
-    return `<p class="total${i ? ' more' : ''}">${money(g.principal, cur, true)}</p>
-      <p class="sub">${esc(t.totalSub(money(g.owed, cur, true), interest))}</p>`;
+    return `<p class="total${i ? ' more' : ''}">${money(g.owed, cur, true)}</p>
+      ${interest ? `<p class="sub">${esc(t.totalSub(interest, money(g.principal, cur, true)))}</p>` : ''}`;
   }).join('');
 
   return `<h1>${t.totalTitle}</h1>
@@ -212,15 +245,16 @@ let hottest = null; // highest APR among active commitments, when more than one 
 /** One compact row on the home screen: what matters at a glance. */
 function renderRow({ c, cur, s }, hot) {
   const { t, num, money, monthYear } = I;
-  const meta = s.done ? t.finishedOn(monthYear(s.end)) : t.leftEnds(num(s.remaining), num(c.total), monthYear(s.end));
+  const meta = s.done ? t.finishedOn(monthYear(s.end, c.calendar)) : t.leftEnds(num(s.remaining), num(s.total), monthYear(s.end, c.calendar));
   return `<button type="button" class="card loan-row${hot ? ' hot' : ''}${s.done ? ' done' : ''}" data-id="${esc(c.id)}">
-    <span class="lr-top"><span class="name">${esc(c.name)}</span><span class="lr-amt">${s.done ? '' : money(s.principal, cur)}</span></span>
-    <span class="mini" aria-hidden="true"><i style="inline-size:${(100 * s.paid) / c.total}%"></i></span>
+    <span class="lr-top"><span class="name">${esc(c.name)}</span><span class="lr-amt">${s.done ? '' : money(s.owed, cur)}</span></span>
+    <span class="mini" aria-hidden="true"><i style="inline-size:${(100 * s.paid) / s.total}%"></i></span>
     <span class="lr-meta">${esc(meta)}</span>
   </button>`;
 }
 
 function openDetails(id) {
+  if (id !== detailId) allPays = false;
   detailId = id;
   renderDetails();
   push($('details'));
@@ -231,32 +265,113 @@ function renderDetails() {
   if (!c) return;
   const r = { c, cur: c.currency || doc.prefs.currency, s: status(c, todayN) };
   setTitle('details', c.name);
+  $('repayBtn').hidden = r.s.done;
   $('detailsBody').innerHTML = renderDetail(r, c.apr === hottest && !r.s.done);
 }
 
 /** Everything about one commitment, shown on the details page. */
 function renderDetail({ c, cur, s }, hot) {
   const { t, num, money, date, monthYear } = I;
-  const progress = c.total <= 120
-    ? `<div class="ticks" style="grid-template-columns:repeat(${tickColumns(c.total)},1fr)">${
-        Array.from({ length: c.total }, (_, i) => `<i class="${i < s.paid ? 'p' : i === s.paid ? 'n' : ''}"></i>`).join('')}</div>`
-    : `<div class="bar"><i style="inline-size:${(100 * s.paid) / c.total}%"></i></div>`;
+  const progress = s.total <= 120
+    ? `<div class="ticks" style="grid-template-columns:repeat(${tickColumns(s.total)},1fr)">${
+        Array.from({ length: s.total }, (_, i) => `<i class="${i < s.paid ? 'p' : i === s.paid ? 'n' : ''}"></i>`).join('')}</div>`
+    : `<div class="bar"><i style="inline-size:${(100 * s.paid) / s.total}%"></i></div>`;
   const rate = c.apr ? t.apr(num(c.apr, 2)) + (hot ? t.hottest : '') : t.noInterest;
+  const po = payoff(c, todayN, c.settleDays || 0);
 
   return `<p class="rate${hot ? ' hot' : ''}">${rate}</p>
-    <div role="img" aria-label="${esc(t.progressLabel(num(s.paid), num(c.total)))}">${progress}</div>
+    <div role="img" aria-label="${esc(t.progressLabel(num(s.paid), num(s.total)))}">${progress}</div>
     <div class="nums">
-      <div><b>${t.of(num(s.remaining), num(c.total))}</b>${t.paymentsLeft}</div>
-      <div><b>${money(s.principal, cur, true)}</b>${c.apr ? t.principalLeft : t.amountLeft}</div>
-      <div><b>${c.apr ? money(s.interest, cur) : '—'}</b>${t.interestLeft}</div>
+      <div><b>${money(s.owed, cur, true)}</b>${c.apr ? t.owedLeft : t.amountLeft}</div>
+      ${c.apr ? `<div><b>${money(s.principal, cur, true)}</b>${t.principalLeft}</div>
+      <div><b>${money(s.interest, cur)}</b>${t.interestLeft}</div>` : ''}
     </div>
     <div class="nums">
-      <div><b>${money(c.amount, cur, true)}</b>${t.perPayment[c.frequency]}</div>
-      <div><b>${s.next != null ? date(s.next) : t.finished}</b>${t.next}</div>
-      <div><b>${monthYear(s.end)}</b>${t.end}</div>
+      <div><b>${t.of(num(s.remaining), num(s.total))}</b>${t.paymentsLeft}</div>
+      <div><b>${money(s.amount, cur, true)}</b>${t.perPayment[c.frequency]}</div>
     </div>
-    <div class="last">${t.lastPaid}: <b>${s.lastPaid != null ? date(s.lastPaid) : t.nonePaid}</b></div>
-    <div class="actions"><button type="button" class="primary wide" data-act="edit">${t.edit}</button></div>`;
+    <div class="nums">
+      <div><b>${s.next != null ? date(s.next, c.calendar) : t.finished}</b>${t.next}</div>
+      <div><b>${monthYear(s.end, c.calendar)}</b>${t.end}</div>
+    </div>
+    <div class="last">${t.lastPaid}: <b>${s.lastPaid != null ? date(s.lastPaid, c.calendar) : t.nonePaid}</b></div>
+    ${po ? `<div class="last">${t.payoffNow}: <b><bdi>${money(po.amount, cur, true)}</bdi></b>${
+      // Own line, amount isolated: next to the payoff amount, RTL ran the two together and read as one.
+      po.saved > 0.005 ? `<small class="sub">${t.payoffSaves(`<bdi>${money(po.saved, cur, true)}</bdi>`)}</small>` : ''}</div>` : ''}
+    ${renderPayments(c, cur)}`;
+}
+
+const PAYS_SHOWN = 6;
+let allPays = false; // "Show all" on the details page, until another commitment is opened
+
+/**
+ * Payments made, newest first: instalments are listed by themselves, extra repayments as recorded (#75).
+ * Long loans show the latest few; the rest is one tap away.
+ */
+function renderPayments(c, cur) {
+  const { t, num, money, date } = I;
+  const list = payments(c, todayN);
+  const shown = allPays ? list : list.slice(0, PAYS_SHOWN);
+  const row = e => `<li${e.extra != null ? ' class="extra"' : ''}>
+      <span class="pay-what">${e.extra != null ? `${t.extraPay}<small>${e.effect === 'payment' ? t.effectPayment : t.effectTerm}</small>` : t.instalment}<small>${date(e.day, c.calendar)}</small></span>
+      <b><bdi>${money(e.amount, cur, true)}</bdi></b>${e.extra != null
+        ? `<button type="button" class="icon pay-del" data-act="del-extra" data-i="${e.extra}" aria-label="${esc(t.remove)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : ''}
+    </li>`;
+  return `<h3 class="form-group">${t.paymentsTitle}</h3>
+    ${list.length ? `<ul class="pays">${shown.map(row).join('')}</ul>` : `<p class="hint">${t.nonePaid}</p>`}
+    ${shown.length < list.length ? `<button type="button" class="linkish" data-act="all-pays">${t.showAll(num(list.length))}</button>` : ''}`;
+}
+
+// --- extra repayment (#75) ------------------------------------------------------
+
+let repay = null; // { on, amount, effect } as typed
+
+function openRepay() {
+  repay = { on: todayN, amount: '', effect: 'term' };
+  renderRepay();
+  push($('repayPage'), $('repayForm').elements.amount);
+}
+
+function renderRepay(errors = {}) {
+  const { t, plain } = I;
+  const c = doc.commitments.find(x => x.id === detailId);
+  const start = dayFromISO(c.borrowedOn || c.first);
+  setTitle('repayPage', t.addRepay);
+  $('repayForm').innerHTML = `
+    <div class="split">
+      ${field('amount', t.repayAmount, text('amount', typeof repay.amount === 'number' ? plain(repay.amount) : repay.amount))}
+      ${field('on', t.repayDate, `<input type="date" name="on" class="num" value="${repay.on == null ? '' : isoFromDay(repay.on)}" min="${isoFromDay(start)}" max="${isoFromDay(todayN)}">`)}
+    </div>
+    ${field('effect', t.repayEffect, seg('effect', [['term', t.effectTerm], ['payment', t.effectPayment]], repay.effect), t.repayEffectHint)}
+    <div class="actions save-bar">
+      <button type="submit" class="primary">${t.save}</button>
+      <button type="button" class="secondary" data-back>${t.cancel}</button>
+    </div>`;
+  for (const [name, msg] of Object.entries(errors)) {
+    const f = $('repayForm').querySelector(`[data-field="${name}"]`);
+    f.classList.add('invalid');
+    f.insertAdjacentHTML('beforeend', `<small class="err">${esc(msg)}</small>`);
+  }
+}
+
+function onRepaySubmit(e) {
+  e.preventDefault();
+  const { t } = I;
+  const f = $('repayForm').elements;
+  const c = doc.commitments.find(x => x.id === detailId);
+  const v = parseNumber(f.amount.value);
+  repay = { amount: v === null || Number.isNaN(v) ? f.amount.value : v, on: f.on.value ? dayFromISO(f.on.value) : null, effect: f.effect.value };
+  const errors = {};
+  if (repay.amount === '') errors.amount = t.err.required;
+  else if (!(repay.amount > 0)) errors.amount = t.err.positive;
+  if (repay.on == null) errors.on = t.err.required;
+  else if (repay.on > todayN) errors.on = t.err.future;
+  else if (repay.on < dayFromISO(c.borrowedOn || c.first)) errors.on = t.err.beforeLoan;
+  if (Object.keys(errors).length) { renderRepay(errors); return; }
+  c.extra = [...(c.extra || []), { on: isoFromDay(repay.on), amount: repay.amount, effect: repay.effect }];
+  persist();
+  render();
+  back();
 }
 
 function renderLump() {
@@ -273,17 +388,28 @@ function renderLump() {
   sel.value = curs.includes(prev) ? prev : curs[0];
 
   const x = parseNumber($('lumpAmount').value);
-  if (!(x > 0)) { $('lumpRes').innerHTML = ''; return; }
   const cur = sel.value;
-  const opts = eligible
-    .filter(c => (c.currency || doc.prefs.currency) === cur)
-    .map(c => ({ c, r: lumpSum(c, todayN, x) }))
-    .sort((a, b) => b.r.saved - a.r.saved);
-  $('lumpRes').innerHTML = opts.map(({ c, r }, i) => `
-    <div class="opt${i === 0 && opts.length > 1 ? ' best' : ''}">
-      <div>${esc(c.name)}<small>${t.monthsSooner(r.monthsCut, I.num(r.monthsCut))}${r.settles ? t.settles : ''}</small></div>
-      <div class="save">${money(r.saved, cur)}</div>
-    </div>`).join('');
+  const mine = eligible.filter(c => (c.currency || doc.prefs.currency) === cur);
+  // Every loan is listed in paying order, unticked ones too so they can be ticked back.
+  const order = allocate(mine, todayN, 0).rows.map(r => r.c);
+  const a = allocate(mine.filter(c => !lumpOff.has(c.id)), todayN, x > 0 ? x : 0);
+  const got = new Map(a.rows.map(r => [r.c.id, r]));
+  const line = c => {
+    const g = got.get(c.id);
+    if (!g) return t.lumpOff;
+    if (!(x > 0)) return '';
+    if (!g.r) return t.lumpNone;
+    return `${t.lumpGive(`<bdi>${money(g.give, cur, true)}</bdi>`)}${t.lumpSep}${t.monthsSooner(g.r.monthsCut, I.num(g.r.monthsCut))}${g.r.settles ? t.settles : ''}`;
+  };
+  $('lumpRes').innerHTML = order.map(c => {
+    const g = got.get(c.id);
+    return `<label class="opt${g?.r ? ' best' : ''}${g ? '' : ' off'}">
+      <input type="checkbox" data-lump="${esc(c.id)}"${g ? ' checked' : ''}>
+      <div class="opt-name">${esc(c.name)}<small>${line(c)}</small></div>
+      <div class="save">${g?.r ? money(g.r.saved, cur) : ''}</div>
+    </label>`;
+  }).join('') + (x > 0 && a.rows.length ? `<div class="opt total"><div>${t.lumpTotal}${
+    a.left > 0.005 ? `<small>${t.lumpLeft(`<bdi>${money(a.left, cur, true)}</bdi>`)}</small>` : ''}</div><div class="save">${money(a.saved, cur)}</div></div>` : '');
 }
 
 // --- editor --------------------------------------------------------------------
@@ -293,8 +419,10 @@ function seg(name, options, value) {
     `<label><input type="radio" name="${name}" value="${v}"${String(v) === String(value) ? ' checked' : ''}><span>${esc(label)}</span></label>`).join('')}</div>`;
 }
 
+// Help sits behind an (i) by the label, not under every input, which crowded the form (#69).
 function field(name, label, control, hint = '') {
-  return `<div class="field" data-field="${name}"><label>${esc(label)}</label>${control}${hint ? `<small class="hint">${esc(hint)}</small>` : ''}</div>`;
+  const info = hint ? `<button type="button" class="info" aria-expanded="false" aria-label="${esc(I.t.help)}">i</button>` : '';
+  return `<div class="field" data-field="${name}"><label>${esc(label)}${info}</label>${control}${hint ? `<small class="hint" data-hint="${name}" hidden>${esc(hint)}</small>` : ''}</div>`;
 }
 
 const text = (name, value, cls = 'num', mode = 'decimal') =>
@@ -316,10 +444,15 @@ function openEditor(id, fromDetails = false) {
   const cal = c ? c.calendar : doc.prefs.displayCalendar;
   const p = CALENDARS[cal].toParts(todayN);
   draft = c
-    ? { ...c, apr: c.apr ?? '', mode: 'remaining', remaining: status(c, todayN).remaining, startN: dayFromISO(c.first) }
+    ? { ...c, apr: c.apr ?? '', settleDays: c.settleDays || 0, borrowed: c.borrowed ?? '', borrowedN: c.borrowedOn ? dayFromISO(c.borrowedOn) : null,
+        // Reopen the way it was entered: it always came back on Payments left (#63).
+        mode: c.countFrom === 'start' ? 'start' : 'remaining', startN: dayFromISO(c.first),
+        // The contract's count, not the ledger's: extra repayments shorten the latter, and saving it
+        // back would move the first payment.
+        remaining: status({ ...c, extra: [] }, todayN).remaining }
     : {
         id: null, name: '', amount: '', currency: null, frequency: 'monthly', calendar: cal,
-        payDay: p.d, total: '', apr: '', mode: 'start', remaining: '', startN: todayN,
+        payDay: p.d, total: '', apr: '', settleDays: 0, borrowed: '', borrowedN: null, mode: 'start', remaining: '', startN: todayN,
       };
   draft.wd = draft.frequency === 'weekly' ? draft.payDay : weekday(todayN);
   draft.md = draft.frequency === 'monthly' ? draft.payDay : p.d;
@@ -336,11 +469,7 @@ function renderEditor(errors = {}) {
   const months = monthNames(d.calendar).map((n, i) => [i + 1, n]);
   // Days and years are picked, not typed: one tap opens the native picker on phones.
   const days = max => Array.from({ length: max }, (_, i) => [i + 1, num(i + 1)]);
-  const sp = C.toParts(d.startN ?? todayN);
-  const thisYear = C.toParts(todayN).y;
   const [yLo, yHi] = YEAR_RANGE[d.calendar];
-  const years = [];
-  for (let y = Math.max(yLo, Math.min(sp.y, thisYear - 40)); y <= Math.min(yHi, Math.max(sp.y, thisYear + 10)); y++) years.push([y, plain(y)]);
   const sel = (name, opts, v) => `<select name="${name}">${opts.map(([k, l]) => `<option value="${k}"${String(k) === String(v) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   const n = v => (v === '' || v == null || Number.isNaN(v) ? v ?? '' : typeof v === 'number' ? plain(v) : v);
 
@@ -351,8 +480,20 @@ function renderEditor(errors = {}) {
     yearly: field('yd', t.payYearDay, `<div class="split">${sel('ydd', days(31), d.yd.d)}${sel('ydm', months, d.yd.m)}</div>`, t.payMonthDayHint),
   }[d.frequency];
 
+  // A calendar picker, as asked (#62); dropdowns were big and typing was awkward (#56). The native
+  // picker is Gregorian, so a Solar or Lunar Hijri commitment also shows the date in its own calendar.
+  const echo = n => {
+    if (n == null || d.calendar === 'gregorian') return '';
+    const q = C.toParts(n);
+    return `<small class="cal-echo">${num(q.d)} ${esc(monthNames(d.calendar)[q.m - 1])} ${plain(q.y)}</small>`;
+  };
+  const datePick = (name, n, attrs = '') => `<input type="date" name="${name}" class="num" value="${n == null ? '' : isoFromDay(n)}"${attrs}>${echo(n)}`;
+  const borrowedOn = field('borrowedOn', t.borrowedOn, datePick('borrowedOn', d.borrowedN, ` max="${isoFromDay(todayN)}"`));
+
   const when = d.mode === 'start'
-    ? field('start', t.startDate, `<div class="split3">${sel('sd', days(C.monthLength(sp.y, sp.m)), sp.d)}${sel('sm', months, sp.m)}${sel('sy', years, sp.y)}</div>`, t.startHint)
+    // A calendar picker like the payout date's (#81); the three dropdowns were slow to set.
+    ? field('start', t.startDate, datePick('start', d.startN,
+        ` min="${isoFromDay(C.fromParts(yLo, 1, 1))}" max="${isoFromDay(C.fromParts(yHi, 12, 1))}"`), t.startHint)
     : field('remaining', t.remaining, text('remaining', n(d.remaining), 'num', 'numeric'), t.remainingHint);
 
   setTitle('editor', d.id ? t.editTitle : t.newTitle);
@@ -362,16 +503,25 @@ function renderEditor(errors = {}) {
       ${field('amount', t.amount, text('amount', n(d.amount)))}
       ${field('currency', t.currency, `<select name="currency">${currencyOptions(d.currency, true)}</select>`)}
     </div>
-    ${field('frequency', t.frequency, seg('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency))}
+    ${d.frequency === 'yearly' || d.frequency === 'daily'
+      // A day and a month don't fit in half a row; daily has no pay day.
+      ? field('frequency', t.frequency, sel('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency)) + payDay
+      : `<div class="split">${field('frequency', t.frequency, sel('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency))}${payDay}</div>`}
     ${field('calendar', t.calendar, seg('calendar', CAL_ORDER.map(c => [c, t.cal[c]]), d.calendar), d.calendar === 'hijri' ? t.hijriHint : '')}
-    ${payDay}
+    ${field('mode', t.mode, seg('mode', [['start', t.fromStart], ['remaining', t.fromRemaining]], d.mode))}
     <div class="split">
       ${field('total', t.total, text('total', n(d.total), 'num', 'numeric'))}
-      ${field('apr', t.aprField, text('apr', n(d.apr)))}
+      ${when}
     </div>
-    <small class="hint row-hint">${esc(t.aprHint)}</small>
-    ${field('mode', t.mode, seg('mode', [['start', t.fromStart], ['remaining', t.fromRemaining]], d.mode))}
-    ${when}
+    <h3 class="form-group">${esc(t.interestGroup)}</h3>
+    <div class="split">
+      ${field('apr', t.aprField, text('apr', n(d.apr)), t.aprHint)}
+      ${field('settleDays', t.settleDays, text('settleDays', n(d.settleDays), 'num', 'numeric'), t.settleDaysHint)}
+    </div>
+    <div class="split">
+      ${field('borrowed', t.borrowed, text('borrowed', n(d.borrowed)), t.borrowedHint)}
+      ${borrowedOn}
+    </div>
     <div class="actions save-bar">
       <button type="submit" class="primary">${t.save}</button>
       ${d.id ? `<button type="button" class="danger" data-act="delete">${t.del}</button>` : `<button type="button" class="secondary" data-back>${t.cancel}</button>`}
@@ -396,16 +546,14 @@ function collect() {
   d.currency = val('currency') || null;
   d.total = numOr(val('total'));
   d.apr = numOr(val('apr'));
+  d.settleDays = numOr(val('settleDays'));
+  d.borrowed = numOr(val('borrowed'));
+  d.borrowedN = val('borrowedOn') ? dayFromISO(val('borrowedOn')) : null;
   if (f.wd) d.wd = +val('wd');
   if (f.md) d.md = numOr(val('md'));
   if (f.ydd) d.yd = { d: numOr(val('ydd')), m: +val('ydm') };
   if (f.remaining) d.remaining = numOr(val('remaining'));
-  if (f.sd) {
-    const C = CALENDARS[d.calendar];
-    const [dd, mm, yy] = [+val('sd'), +val('sm'), +val('sy')];
-    // Moving to a shorter month keeps the day valid: 31 becomes that month's last day.
-    d.startN = C.fromParts(yy, mm, Math.min(dd, C.monthLength(yy, mm)));
-  }
+  if (f.start) d.startN = val('start') ? dayFromISO(val('start')) : null;
 }
 
 function validateDraft() {
@@ -418,6 +566,10 @@ function validateDraft() {
   if (d.total === '') e.total = t.err.required;
   else if (!isInt(d.total, 1, 100000)) e.total = Number.isInteger(d.total) ? t.err.positive : t.err.integer;
   if (d.apr !== '' && !(d.apr >= 0 && d.apr < 1000)) e.apr = t.err.nonneg;
+  if (d.settleDays !== '' && !isInt(d.settleDays, 0, 365)) e.settleDays = t.err.range(num(0), num(365));
+  if (d.borrowed !== '' && !(d.borrowed > 0)) e.borrowed = t.err.positive;
+  if (d.borrowed !== '' && d.borrowedN == null) e.borrowedOn = t.err.required;
+  else if (d.borrowed === '' && d.borrowedN != null) e.borrowed = t.err.required;
   if (d.frequency === 'monthly' && !isInt(d.md, 1, 31)) e.md = t.err.range(num(1), num(31));
   if (d.frequency === 'yearly' && !isInt(d.yd.d, 1, 31)) e.yd = t.err.range(num(1), num(31));
   if (d.mode === 'start' && d.startN == null) e.start = t.err.date;
@@ -430,8 +582,8 @@ function validateDraft() {
 }
 
 function onEditorChange(e) {
-  // sm/sy change the length of the start month, so the day list is rebuilt.
-  if (!['frequency', 'calendar', 'mode', 'sm', 'sy'].includes(e.target.name)) return;
+  // Dates re-render for the date in the commitment's own calendar under the picker.
+  if (!['frequency', 'calendar', 'mode', 'start', 'borrowedOn'].includes(e.target.name)) return;
   collect();
   const d = draft;
   if (e.target.name === 'calendar') {
@@ -440,7 +592,7 @@ function onEditorChange(e) {
     // Keep the same real-world day for the start date; re-express pay days in the new calendar.
     const ref = CALENDARS[d.calendar].toParts(d.startN ?? todayN);
     if (prevCal !== d.calendar) { d.md = ref.d; d.yd = { m: ref.m, d: ref.d }; }
-  } else if (e.target.name !== 'sm' && e.target.name !== 'sy') {
+  } else if (!['start', 'borrowedOn'].includes(e.target.name)) {
     d[e.target.name] = e.target.value;
   }
   renderEditor();
@@ -466,8 +618,19 @@ function onEditorSubmit(e) {
     payDay: { daily: null, weekly: d.wd, monthly: d.md, yearly: d.yd }[d.frequency],
     total: d.total,
     apr: d.apr === '' || d.apr === 0 ? null : d.apr,
+    settleDays: d.settleDays || 0,
+    borrowed: d.borrowed === '' ? null : d.borrowed,
+    borrowedOn: d.borrowedN == null ? null : isoFromDay(d.borrowedN),
+    countFrom: d.mode,
+    extra: doc.commitments.find(x => x.id === d.id)?.extra || [],
   };
   c.first = d.mode === 'start' ? firstFromStart(c, isoFromDay(d.startN)) : firstFromRemaining(c, d.remaining, todayN);
+  // Known only once the first payment is: import rejects a payout after it, so the editor must too.
+  if (c.borrowedOn && c.borrowedOn > c.first) {
+    renderEditor({ borrowedOn: I.t.err.afterFirst });
+    $('editForm').querySelector('.invalid')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return;
+  }
   const i = doc.commitments.findIndex(x => x.id === c.id);
   if (i >= 0) doc.commitments[i] = c; else doc.commitments.push(c);
   persist();
@@ -488,6 +651,34 @@ $('editForm').addEventListener('change', onEditorChange);
 $('editForm').addEventListener('submit', onEditorSubmit);
 $('editForm').addEventListener('click', onEditorClick);
 
+/**
+ * Help behind (i) opens as a tooltip over the form (#82). Opening it as text under the field
+ * pushed everything below it down, and in a two-column row it shifted the other column too.
+ */
+function onInfoClick(e) {
+  const form = e.currentTarget;
+  const open = form.querySelector('.tip');
+  const info = e.target.closest('button.info');
+  if (open) {
+    open.remove();
+    form.querySelector('button.info[aria-expanded=true]')?.setAttribute('aria-expanded', 'false');
+    if (!info || open.dataset.for === info.closest('.field').dataset.field) return;
+  }
+  if (!info) return;
+  const field = info.closest('.field');
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  tip.setAttribute('role', 'tooltip');
+  tip.dataset.for = field.dataset.field;
+  tip.textContent = field.querySelector('small.hint').textContent;
+  const f = form.getBoundingClientRect(), b = info.getBoundingClientRect();
+  tip.style.top = `${b.bottom - f.top + 8}px`;
+  tip.style.setProperty('--arrow', `${b.left + b.width / 2 - f.left}px`);
+  form.append(tip);
+  info.setAttribute('aria-expanded', 'true');
+}
+for (const id of ['editForm', 'repayForm', 'settingsBody']) $(id).addEventListener('click', onInfoClick);
+
 // --- settings ------------------------------------------------------------------
 
 function renderSettings() {
@@ -495,8 +686,7 @@ function renderSettings() {
   setTitle('settings', t.settings);
   $('settingsBody').innerHTML = `
     ${field('lang', t.language, seg('lang', [['fa', 'فارسی'], ['en', 'English']], doc.prefs.lang))}
-    ${field('displayCalendar', t.displayCalendar, seg('displayCalendar', CAL_ORDER.map(c => [c, t.cal[c]]), doc.prefs.displayCalendar))}
-    ${field('theme', t.theme, seg('theme', THEME_ORDER.map(v => [v, t.themes[v]]), doc.prefs.theme))}
+    ${field('displayCalendar', t.displayCalendar, seg('displayCalendar', CAL_ORDER.map(c => [c, t.cal[c]]), doc.prefs.displayCalendar), t.displayCalendarHint)}
     ${field('currency', t.defaultCurrency, `<select name="currency">${currencyOptions(doc.prefs.currency, false)}</select>`)}
     <div class="group">
       <h2 style="font-size:16px;margin-top:14px">${t.backup}</h2>
@@ -506,10 +696,9 @@ function renderSettings() {
         <button type="button" class="secondary" data-act="import">${t.importBtn}</button>
       </div>
     </div>
-    ${isBrowser && !standalone && (canPromptInstall() || iosManualInstall) ? `<div class="group">
+    ${iosManualInstall ? `<div class="group">
       <h2 style="font-size:16px;margin-top:14px">${t.installTitle}</h2>
-      <p class="hint">${canPromptInstall() ? t.installHint : t.installIos}</p>
-      ${canPromptInstall() ? `<button type="button" class="primary wide" data-act="install">${t.installBtn}</button>` : ''}
+      <p class="hint">${t.installIos}</p>
     </div>` : ''}
     <p class="about">${isBrowser ? t.aboutWeb : t.about}</p>
     <p class="about" id="versionLine">${versionHtml()}</p>`;
@@ -527,7 +716,6 @@ $('settingsBody').addEventListener('change', e => {
     doc.prefs.displayCalendar = LANGS[value].calendar;
   } else if (name === 'displayCalendar') doc.prefs.displayCalendar = value;
   else if (name === 'currency') doc.prefs.currency = value;
-  else if (name === 'theme') doc.prefs.theme = value;
   else return;
   persist();
   applyPrefs();
@@ -538,7 +726,6 @@ $('settingsBody').addEventListener('change', e => {
 $('settingsBody').addEventListener('click', async e => {
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'import') $('importFile').click();
-  if (act === 'install') promptInstall();
   if (act === 'export') {
     try {
       await exportFile(doc, isoFromDay(today()));

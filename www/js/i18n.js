@@ -16,20 +16,32 @@ const S = {
   fa: {
     app: 'قسط',
     totalTitle: 'کل بدهی باقی‌مونده',
-    totalSub: (owed, interest) => interest
-      ? `مجموع قسط‌های باقی‌مونده ${owed}، یعنی ${interest} سود دیگه در پیشه.`
-      : `مجموع قسط‌های باقی‌مونده ${owed}.`,
+    totalSub: (interest, principal) => `${interest} از این مبلغ سوده و ${principal} اصل وام.`,
     monthlyFact: 'پرداخت ماهانه‌ی فعلی',
     endFact: 'پایان همه‌ی تعهدها',
     allDone: 'همه تموم شدن',
     emptyTitle: 'هنوز تعهدی ثبت نکردی',
-    emptyHint: 'وام، قسط ماشین، شهریه یا هر پرداخت ثابتی که تعداد قسطش معلومه رو اضافه کن تا ببینی کجای کاری و کِی تموم می‌شه.',
+    emptyHint: 'با دکمه‌ی + بالا، وام، قسط ماشین، شهریه یا هر پرداخت ثابتی که تعداد قسطش معلومه رو اضافه کن تا ببینی کجای کاری و کِی تموم می‌شه.',
     add: 'افزودن تعهد',
     noInterest: 'بدون سود',
     apr: v => `سود ${v}٪`,
     hottest: '، گرون‌ترین',
     of: (a, b) => `${a} از ${b}`,
     paymentsLeft: 'قسط مونده',
+    owedLeft: 'باقی‌مونده با سود',
+    paymentsTitle: 'پرداخت‌ها',
+    instalment: 'قسط',
+    extraPay: 'پرداخت اضافه',
+    effectTerm: 'زودتر تموم بشه',
+    effectPayment: 'قسط کمتر بشه',
+    showAll: n => `نمایش همه (${n})`,
+    addRepay: 'ثبت پرداخت اضافه',
+    repayAmount: 'مبلغ',
+    repayDate: 'تاریخ پرداخت',
+    repayEffect: 'بعد از این پرداخت',
+    repayEffectHint: 'بانک‌ها یکی از این دو کار رو می‌کنن: قسط همون می‌مونه و وام زودتر تموم می‌شه، یا تاریخ پایان همون می‌مونه و قسط کم می‌شه. ببین بانکت کدوم رو کرده.',
+    remove: 'حذف',
+    confirmDelExtra: (amt, d) => `پرداخت ${amt} در ${d} حذف بشه؟`,
     principalLeft: 'اصل باقی‌مونده',
     amountLeft: 'مبلغ باقی‌مونده',
     interestLeft: 'سود باقی‌مونده',
@@ -38,19 +50,29 @@ const S = {
     end: 'آخرین قسط',
     lastPaid: 'آخرین پرداخت انجام‌شده',
     nonePaid: 'هنوز پرداختی نشده',
+    payoffNow: 'برای تسویه‌ی کامل الان',
+    payoffSaves: x => `${x} کمتر از پرداخت تا آخر`,
     finished: 'تموم شد',
     finishedOn: e => `تموم شد · ${e}`,
     leftEnds: (a, b, e) => `${a} از ${b} قسط مونده · تا ${e}`,
     edit: 'ویرایش',
     progressLabel: (a, b) => `${a} از ${b} قسط پرداخت شده`,
     lumpTitle: 'اگه پول اضافه دستم اومد',
-    lumpHint: 'مبلغ رو بزن تا ببینی پرداختش روی هر تعهد چقدر سود کم می‌کنه. فرض: قسط ثابت می‌مونه و مدت کوتاه می‌شه. تعهدهای بدون سود اینجا نیستن.',
+    lumpHint: 'مبلغ رو بزن تا ببینی چطور بین وام‌ها پخش می‌شه: اول وامِ با سود بیشتر، و اگه چیزی موند، بعدی. تیک هر وام رو برداری، کنار گذاشته می‌شه. فرض: قسط ثابت می‌مونه و مدت کوتاه می‌شه. تعهدهای بدون سود اینجا نیستن.',
+    lumpGive: x => `${x} به این`,
+    lumpSep: '، ', // a middle dot next to digits reads as the Persian zero (۰): "· ۱۲" looked like ۱۲۰
+    lumpNone: 'چیزی به این نمی‌رسه',
+    lumpOff: 'کنار گذاشته شده',
+    lumpTotal: 'جمع سودی که نمی‌دی',
+    lumpLeft: x => `${x} اضافه می‌مونه`,
     lumpLabel: 'مبلغ پیش‌پرداخت',
     monthsSooner: (n, f) => n > 0 ? `${f} ماه زودتر تموم می‌شه` : 'تاریخ پایان تقریباً عوض نمی‌شه',
     settles: '، کل بدهی تسویه می‌شه',
     foot: 'اصل باقی‌مونده از روی سود سالانه (APR)، مبلغ و تعداد قسط‌ها حساب می‌شه. عدد تسویه‌ی بانک ممکنه کمی فرق کنه.',
     newTitle: 'تعهد جدید',
     editTitle: 'ویرایش تعهد',
+    help: 'توضیح',
+    interestGroup: 'سود (اختیاری)',
     name: 'اسم',
     namePh: 'مثلاً وام ماشین',
     amount: 'مبلغ هر قسط',
@@ -66,6 +88,11 @@ const S = {
     total: 'تعداد کل قسط‌ها',
     aprField: 'سود سالانه (APR٪)',
     aprHint: 'اختیاری. خالی یعنی بدون سود.',
+    settleDays: 'روزهای سود تسویه',
+    settleDaysHint: 'اگه زودتر تسویه کنی، وام‌دهنده چند روز سود اضافه حساب می‌کنه؟ اگه نمی‌دونی ۰ بذار. وام‌های بریتانیا معمولاً ۵۸ روز (۲۸ روز + یک ماه).',
+    borrowed: 'مبلغ وام دریافتی',
+    borrowedOn: 'تاریخ دریافت وام',
+    borrowedHint: 'اختیاری، برای مبلغ تسویه‌ی دقیق. مبلغ وام از قرارداد، و روزی که به حسابت واریز شد. اگه خالی بمونه، از روی قسط‌ها حساب می‌شه.',
     mode: 'از کجا حساب کنم؟',
     fromStart: 'تاریخ شروع',
     fromRemaining: 'قسط‌های مونده',
@@ -85,13 +112,15 @@ const S = {
       integer: 'باید عدد صحیح باشه',
       range: (a, b) => `باید بین ${a} و ${b} باشه`,
       date: 'این تاریخ وجود نداره',
+      afterFirst: 'نمی‌تونه بعد از اولین قسط باشه',
+      future: 'نمی‌تونه بعد از امروز باشه',
+      beforeLoan: 'نمی‌تونه قبل از شروع وام باشه',
     },
     settings: 'تنظیمات',
     language: 'زبان',
-    displayCalendar: 'تقویم نمایش',
+    displayCalendar: 'تقویم پیش‌فرض',
+    displayCalendarHint: 'برای تعهدهای تازه و تاریخ پایان همه. تاریخ‌های هر تعهد با تقویم خودش نشون داده می‌شه.',
     defaultCurrency: 'ارز پیش‌فرض',
-    theme: 'ظاهر',
-    themes: { system: 'خودکار', light: 'روشن', dark: 'تیره' },
     themeToggle: { light: 'ظاهر روشن', dark: 'ظاهر تیره' },
     dflt: 'پیش‌فرض',
     backup: 'پشتیبان',
@@ -106,7 +135,6 @@ const S = {
     backupHintWeb: 'داده‌ها فقط توی همین مرورگر روی همین دستگاه‌ان. پاک کردن داده‌های سایت یا مرورگر پاکشون می‌کنه، پس گاهی خروجی بگیر.',
     aboutWeb: 'متن‌باز با مجوز GPL-3.0. بعد از اولین بار بدون اینترنت کار می‌کنه و هیچ داده‌ای به جایی فرستاده نمی‌شه.',
     installTitle: 'نصب اپ',
-    installHint: 'قسط رو مثل یه اپ نصب کن تا از صفحه‌ی اصلی و بدون اینترنت باز بشه.',
     installIos: 'برای نصب: توی سافاری دکمه‌ی Share و بعد Add to Home Screen.',
     installBtn: 'نصب',
     updateBtn: 'به‌روزرسانی',
@@ -118,20 +146,32 @@ const S = {
   en: {
     app: 'Ghest',
     totalTitle: 'Total left to repay',
-    totalSub: (owed, interest) => interest
-      ? `${owed} in remaining payments, so ${interest} of interest still to come.`
-      : `${owed} in remaining payments.`,
+    totalSub: (interest, principal) => `${interest} of it is interest, ${principal} principal.`,
     monthlyFact: 'Paying per month',
     endFact: 'Everything ends',
     allDone: 'All done',
     emptyTitle: 'Nothing here yet',
-    emptyHint: 'Add a loan, car finance, tuition or any fixed payment with a known number of instalments to see where you are and when it ends.',
+    emptyHint: 'Tap + above to add a loan, car finance, tuition or any fixed payment with a known number of instalments, and see where you are and when it ends.',
     add: 'Add commitment',
     noInterest: 'No interest',
     apr: v => `${v}% APR`,
     hottest: ', most expensive',
     of: (a, b) => `${a} of ${b}`,
     paymentsLeft: 'payments left',
+    owedLeft: 'Left to pay, with interest',
+    paymentsTitle: 'Payments made',
+    instalment: 'Instalment',
+    extraPay: 'Extra repayment',
+    effectTerm: 'Finish sooner',
+    effectPayment: 'Lower payments',
+    showAll: n => `Show all (${n})`,
+    addRepay: 'Add an extra repayment',
+    repayAmount: 'Amount',
+    repayDate: 'Date paid',
+    repayEffect: 'After this repayment',
+    repayEffectHint: 'Lenders do one of two things: keep the payment and end sooner, or keep the end date and lower the payment. Pick what yours did.',
+    remove: 'Remove',
+    confirmDelExtra: (amt, d) => `Remove the ${amt} repayment of ${d}?`,
     principalLeft: 'Principal left',
     amountLeft: 'Amount left',
     interestLeft: 'Interest left',
@@ -140,19 +180,29 @@ const S = {
     end: 'Final payment',
     lastPaid: 'Last payment made',
     nonePaid: 'none yet',
+    payoffNow: 'To pay off now',
+    payoffSaves: x => `${x} less than paying to the end`,
     finished: 'Finished',
     finishedOn: e => `Finished · ${e}`,
     leftEnds: (a, b, e) => `${a} of ${b} left · ends ${e}`,
     edit: 'Edit',
     progressLabel: (a, b) => `${a} of ${b} payments made`,
     lumpTitle: 'If I pay a lump sum',
-    lumpHint: 'Enter an amount to see how much interest it saves on each commitment. Assumes the payment stays the same and the term gets shorter. Interest-free commitments are left out.',
+    lumpHint: 'Enter an amount to see how it splits across your loans: the highest APR first, and whatever is left goes to the next. Untick a loan to leave it out. Assumes the payment stays the same and the term gets shorter. Interest-free commitments are left out.',
+    lumpGive: x => `${x} to this`,
+    lumpSep: ' · ',
+    lumpNone: 'Nothing left for this one',
+    lumpOff: 'Left out',
+    lumpTotal: 'Total interest saved',
+    lumpLeft: x => `${x} left over`,
     lumpLabel: 'Lump sum',
     monthsSooner: (n, f) => n > 0 ? `ends ${f} month${n === 1 ? '' : 's'} sooner` : 'end date barely moves',
     settles: ', pays it off entirely',
     foot: 'Principal is derived from the APR, the payment amount and the number of payments. Your lender’s settlement figure may differ slightly.',
     newTitle: 'New commitment',
     editTitle: 'Edit commitment',
+    help: 'Help',
+    interestGroup: 'Interest (optional)',
     name: 'Name',
     namePh: 'e.g. Car loan',
     amount: 'Amount per payment',
@@ -168,6 +218,11 @@ const S = {
     total: 'Number of payments',
     aprField: 'APR (%)',
     aprHint: 'Optional. Leave empty for no interest.',
+    settleDays: 'Payoff interest days',
+    settleDaysHint: 'Extra days of interest the lender counts if you pay off early. 0 if unsure. UK loans: usually 58 (28 days + 1 month).',
+    borrowed: 'Amount borrowed',
+    borrowedOn: 'Date you received it',
+    borrowedHint: 'Optional, for an exact payoff amount: the loan amount from your agreement and the day it reached your account. Left empty, it is worked out from the payments.',
     mode: 'Count from',
     fromStart: 'Start date',
     fromRemaining: 'Payments left',
@@ -187,13 +242,15 @@ const S = {
       integer: 'Must be a whole number',
       range: (a, b) => `Must be between ${a} and ${b}`,
       date: 'That date doesn’t exist',
+      afterFirst: 'Can’t be after the first payment',
+      future: 'Can’t be after today',
+      beforeLoan: 'Can’t be before the loan started',
     },
     settings: 'Settings',
     language: 'Language',
-    displayCalendar: 'Display calendar',
+    displayCalendar: 'Default calendar',
+    displayCalendarHint: 'For new commitments and the date everything ends. Each commitment’s dates use its own calendar.',
     defaultCurrency: 'Default currency',
-    theme: 'Theme',
-    themes: { system: 'System', light: 'Light', dark: 'Dark' },
     themeToggle: { light: 'Light theme', dark: 'Dark theme' },
     dflt: 'Default',
     backup: 'Backup',
@@ -208,7 +265,6 @@ const S = {
     backupHintWeb: 'Your data lives only in this browser on this device. Clearing site or browser data deletes it, so export now and then.',
     aboutWeb: 'Open source under GPL-3.0. Works offline after the first visit; nothing you enter is sent anywhere.',
     installTitle: 'Install',
-    installHint: 'Install Ghest as an app to open it from your home screen, offline.',
     installIos: 'To install: in Safari, tap Share, then Add to Home Screen.',
     installBtn: 'Install',
     updateBtn: 'Update',
@@ -223,7 +279,6 @@ export function makeI18n(lang, displayCalendar) {
   const L = LANGS[lang];
   const t = S[lang];
   const loc = L.locale;
-  const dateLoc = `${loc}-u-ca-${INTL_CAL[displayCalendar]}`;
   const cache = new Map();
   const nfmt = (key, opts) => {
     let f = cache.get(key);
@@ -250,8 +305,23 @@ export function makeI18n(lang, displayCalendar) {
     }
   }
 
-  const date = n => dfmt('d', dateLoc, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(n * DAY));
-  const monthYear = n => dfmt('my', dateLoc, { month: 'long', year: 'numeric' }).format(new Date(n * DAY));
+  // A commitment's dates are shown in its own calendar (#83); the display calendar is the default.
+  const dateLoc = cal => `${loc}-u-ca-${INTL_CAL[cal]}`;
+  // Without the era: English adds "AP"/"AH" to Hijri dates, which only repeats the calendar.
+  const parts = (key, cal, opts, n) => {
+    const ps = dfmt(`${key}${cal}`, dateLoc(cal), opts).formatToParts(new Date(n * DAY));
+    const i = ps.findIndex(p => p.type === 'era');
+    return i < 0 ? ps : ps.filter((p, j) => j !== i && !(p.type === 'literal' && (j === i - 1 || j === i + 1) && !p.value.trim()));
+  };
+  const date = (n, cal = displayCalendar) =>
+    parts('d', cal, { day: 'numeric', month: 'long', year: 'numeric' }, n).map(p => p.value).join('').trim();
+  // Month first: ICU's Persian pattern for the Solar Hijri calendar is year-month ("۱۴۰۵ اسفند", #84).
+  const monthYear = (n, cal = displayCalendar) => {
+    const ps = parts('my', cal, { month: 'long', year: 'numeric' }, n);
+    if (lang !== 'fa') return ps.map(p => p.value).join('').trim();
+    const part = type => ps.find(p => p.type === type)?.value;
+    return `${part('month')} ${part('year')}`;
+  };
 
   /** Month names (1..12) of `cal`, in the UI language. */
   function monthNames(cal) {
