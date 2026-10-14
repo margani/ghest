@@ -1,0 +1,6 @@
+- Early payoff amount, exact from the amount borrowed and its date.
+- Amount left shown with interest, as banks show it.
+- Record extra repayments; payments made are listed per loan.
+- Lump sum: highest rate first, up to each loan's payoff amount; untick to leave a loan out.
+- Each loan's dates in its own calendar; date pickers; help behind (i).
+- New round add and lump-sum buttons; icons on the loan page.
