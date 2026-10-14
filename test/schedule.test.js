@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CALENDARS, dayFromISO as D, isoFromDay as iso, weekday } from '../www/js/calendars.js';
 import {
-  firstFromStart, firstFromRemaining, paymentDay, paidCount, status, lumpSum, allocate, payoff, periodicRate, presentValue,
+  firstFromStart, firstFromRemaining, paymentDay, paidCount, status, lumpSum, allocate, payoff, periodicRate, presentValue, payments,
 } from '../www/js/schedule.js';
 
 const dates = (c, n) => Array.from({ length: n }, (_, k) => iso(paymentDay(c, k)));
@@ -343,4 +343,65 @@ test('allocate: more than everything settles all and reports the rest', () => {
   near(a.rows[0].give, status(c, today).principal, 1e-9);
   near(a.left, 5000 - status(c, today).principal, 1e-9);
   assert.deepEqual(allocate([], today, 100), { rows: [], left: 100, saved: 0 });
+});
+
+// Extra repayments outside the instalments (#75): the balance is a ledger of the advance (or the
+// schedule's value), interest on the payment grid, and every instalment and extra in date order.
+const flat = { amount: 100, frequency: 'monthly', calendar: 'gregorian', payDay: 1, total: 10, apr: null, first: '2025-01-01' };
+
+test('extra repayment, finish sooner: same instalment, fewer payments', () => {
+  const c = { ...flat, extra: [{ on: '2025-02-10', amount: 300, effect: 'term' }] };
+  const s = status(c, D('2025-02-15'));
+  assert.equal(s.paid, 2);
+  assert.equal(s.remaining, 5); // 800 left - 300 = 500 = 5 × 100
+  assert.equal(s.total, 7);
+  near(s.owed, 500);
+  assert.equal(iso(s.end), '2025-07-01');
+});
+
+test('extra repayment, lower instalment: same end, smaller payments', () => {
+  const c = { ...flat, extra: [{ on: '2025-02-10', amount: 400, effect: 'payment' }] };
+  const s = status(c, D('2025-02-15'));
+  assert.equal(s.remaining, 8);
+  near(s.amount, 50);
+  near(s.owed, 400);
+  assert.equal(iso(s.end), '2025-10-01');
+});
+
+test('extra repayment with interest: the balance drops by the extra on a payment day', () => {
+  const day = D('2025-09-01'); // the 12th instalment
+  const before = status(ukExample, day);
+  const c = { ...ukExample, extra: [{ on: '2025-09-01', amount: 1000, effect: 'payment' }] };
+  const s = status(c, day);
+  near(s.principal, before.principal - 1000, 1e-6);
+  near(s.amount, (before.principal - 1000) * before.rate / (1 - (1 + before.rate) ** -36), 1e-6);
+  near(payoff(c, day, 0).amount, s.principal, 1e-6);
+  const t = status({ ...ukExample, extra: [{ on: '2025-09-01', amount: 1000, effect: 'term' }] }, day);
+  assert.ok(t.remaining < 36 && t.remaining > 25, String(t.remaining));
+  near(t.amount, 134.57);
+  assert.ok(t.owed < before.owed - 1000, 'interest saved');
+});
+
+test('extra repayment between instalments: interest to that day, then the advance-based payoff', () => {
+  // £1,000 on 2025-09-16, half way through the 30-day period after the 12th instalment.
+  const c = { ...ukAdvance, extra: [{ on: '2025-09-16', amount: 1000, effect: 'payment' }] };
+  const r = periodicRate(14, 'monthly');
+  const p = payoff(c, D('2025-09-16'), 10).amount; // settles 2025-09-26, before the next instalment
+  const want = (3984.00 * (1 + r) ** (15 / 30) - 1000) * (1 + r) ** (10 / 30);
+  near(p, want, 0.01);
+});
+
+test('extra repayment clearing the balance finishes the loan', () => {
+  const c = { ...flat, extra: [{ on: '2025-02-10', amount: 800, effect: 'term' }] };
+  const s = status(c, D('2025-02-15'));
+  assert.ok(s.done);
+  assert.equal(s.remaining, 0);
+  assert.equal(payoff({ ...c, apr: 5 }, D('2025-02-15'), 0)?.amount ?? 0, 0);
+});
+
+test('payments list: instalments made, newest first, with the extras among them', () => {
+  const c = { ...flat, extra: [{ on: '2025-02-10', amount: 300, effect: 'term' }] };
+  const rows = payments(c, D('2025-03-01'));
+  assert.deepEqual(rows.map(r => [iso(r.day), r.amount, r.extra ?? null]),
+    [['2025-03-01', 100, null], ['2025-02-10', 300, 0], ['2025-02-01', 100, null], ['2025-01-01', 100, null]]);
 });

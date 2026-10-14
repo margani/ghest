@@ -1,5 +1,5 @@
 import { CALENDARS, today, dayFromISO, isoFromDay, weekday } from './calendars.js';
-import { FREQUENCIES, status, allocate, payoff, firstFromStart, firstFromRemaining } from './schedule.js';
+import { FREQUENCIES, status, allocate, payoff, payments, firstFromStart, firstFromRemaining } from './schedule.js';
 import { LANGS, makeI18n, currencies, parseNumber, guessDefaults } from './i18n.js';
 import { load, save, exportFile, parseImport } from './store.js';
 import { Capacitor, registerPlugin, SystemBars } from './vendor/capacitor-core.js';
@@ -47,8 +47,27 @@ async function init() {
     if (row) openDetails(row.dataset.id);
   };
   $('detailsBody').onclick = e => {
-    if (e.target.closest('[data-act=edit]')) openEditor(detailId, true);
+    const act = e.target.closest('[data-act]');
+    if (!act) return;
+    if (act.dataset.act === 'edit') openEditor(detailId, true);
+    if (act.dataset.act === 'repay') openRepay();
+    if (act.dataset.act === 'all-pays') { allPays = true; renderDetails(); }
+    if (act.dataset.act === 'del-extra') {
+      const c = doc.commitments.find(x => x.id === detailId);
+      const x = c.extra[+act.dataset.i];
+      const cur = c.currency || doc.prefs.currency;
+      if (!confirm(I.t.confirmDelExtra(I.money(x.amount, cur, true), I.date(dayFromISO(x.on))))) return;
+      c.extra = c.extra.filter((_, i) => i !== +act.dataset.i);
+      persist();
+      render();
+    }
   };
+  $('repayForm').addEventListener('submit', onRepaySubmit);
+  // A stale "Required" under the amount pushed the date beside it down after typing.
+  $('repayForm').addEventListener('input', e => {
+    const f = e.target.closest('.field.invalid');
+    if (f) { f.classList.remove('invalid'); f.querySelector('.err')?.remove(); }
+  });
   $('lumpBtn').onclick = () => push($('lumpPage'), $('lumpAmount'));
   $('lumpAmount').oninput = renderLump;
   $('lumpCurrency').onchange = renderLump;
@@ -222,15 +241,16 @@ let hottest = null; // highest APR among active commitments, when more than one 
 /** One compact row on the home screen: what matters at a glance. */
 function renderRow({ c, cur, s }, hot) {
   const { t, num, money, monthYear } = I;
-  const meta = s.done ? t.finishedOn(monthYear(s.end)) : t.leftEnds(num(s.remaining), num(c.total), monthYear(s.end));
+  const meta = s.done ? t.finishedOn(monthYear(s.end)) : t.leftEnds(num(s.remaining), num(s.total), monthYear(s.end));
   return `<button type="button" class="card loan-row${hot ? ' hot' : ''}${s.done ? ' done' : ''}" data-id="${esc(c.id)}">
     <span class="lr-top"><span class="name">${esc(c.name)}</span><span class="lr-amt">${s.done ? '' : money(s.owed, cur)}</span></span>
-    <span class="mini" aria-hidden="true"><i style="inline-size:${(100 * s.paid) / c.total}%"></i></span>
+    <span class="mini" aria-hidden="true"><i style="inline-size:${(100 * s.paid) / s.total}%"></i></span>
     <span class="lr-meta">${esc(meta)}</span>
   </button>`;
 }
 
 function openDetails(id) {
+  if (id !== detailId) allPays = false;
   detailId = id;
   renderDetails();
   push($('details'));
@@ -247,23 +267,23 @@ function renderDetails() {
 /** Everything about one commitment, shown on the details page. */
 function renderDetail({ c, cur, s }, hot) {
   const { t, num, money, date, monthYear } = I;
-  const progress = c.total <= 120
-    ? `<div class="ticks" style="grid-template-columns:repeat(${tickColumns(c.total)},1fr)">${
-        Array.from({ length: c.total }, (_, i) => `<i class="${i < s.paid ? 'p' : i === s.paid ? 'n' : ''}"></i>`).join('')}</div>`
-    : `<div class="bar"><i style="inline-size:${(100 * s.paid) / c.total}%"></i></div>`;
+  const progress = s.total <= 120
+    ? `<div class="ticks" style="grid-template-columns:repeat(${tickColumns(s.total)},1fr)">${
+        Array.from({ length: s.total }, (_, i) => `<i class="${i < s.paid ? 'p' : i === s.paid ? 'n' : ''}"></i>`).join('')}</div>`
+    : `<div class="bar"><i style="inline-size:${(100 * s.paid) / s.total}%"></i></div>`;
   const rate = c.apr ? t.apr(num(c.apr, 2)) + (hot ? t.hottest : '') : t.noInterest;
   const po = payoff(c, todayN, c.settleDays || 0);
 
   return `<p class="rate${hot ? ' hot' : ''}">${rate}</p>
-    <div role="img" aria-label="${esc(t.progressLabel(num(s.paid), num(c.total)))}">${progress}</div>
+    <div role="img" aria-label="${esc(t.progressLabel(num(s.paid), num(s.total)))}">${progress}</div>
     <div class="nums">
       <div><b>${money(s.owed, cur, true)}</b>${c.apr ? t.owedLeft : t.amountLeft}</div>
       ${c.apr ? `<div><b>${money(s.principal, cur, true)}</b>${t.principalLeft}</div>
       <div><b>${money(s.interest, cur)}</b>${t.interestLeft}</div>` : ''}
     </div>
     <div class="nums">
-      <div><b>${t.of(num(s.remaining), num(c.total))}</b>${t.paymentsLeft}</div>
-      <div><b>${money(c.amount, cur, true)}</b>${t.perPayment[c.frequency]}</div>
+      <div><b>${t.of(num(s.remaining), num(s.total))}</b>${t.paymentsLeft}</div>
+      <div><b>${money(s.amount, cur, true)}</b>${t.perPayment[c.frequency]}</div>
     </div>
     <div class="nums">
       <div><b>${s.next != null ? date(s.next) : t.finished}</b>${t.next}</div>
@@ -273,7 +293,82 @@ function renderDetail({ c, cur, s }, hot) {
     ${po ? `<div class="last">${t.payoffNow}: <b><bdi>${money(po.amount, cur, true)}</bdi></b>${
       // Own line, amount isolated: next to the payoff amount, RTL ran the two together and read as one.
       po.saved > 0.005 ? `<small class="sub">${t.payoffSaves(`<bdi>${money(po.saved, cur, true)}</bdi>`)}</small>` : ''}</div>` : ''}
+    ${renderPayments(c, cur)}
     <div class="actions"><button type="button" class="primary wide" data-act="edit">${t.edit}</button></div>`;
+}
+
+const PAYS_SHOWN = 6;
+let allPays = false; // "Show all" on the details page, until another commitment is opened
+
+/**
+ * Payments made, newest first: instalments are listed by themselves, extra repayments as recorded (#75).
+ * Long loans show the latest few; the rest is one tap away.
+ */
+function renderPayments(c, cur) {
+  const { t, num, money, date } = I;
+  const list = payments(c, todayN);
+  const shown = allPays ? list : list.slice(0, PAYS_SHOWN);
+  const row = e => `<li${e.extra != null ? ' class="extra"' : ''}>
+      <span class="pay-what">${e.extra != null ? `${t.extraPay}<small>${e.effect === 'payment' ? t.effectPayment : t.effectTerm}</small>` : t.instalment}<small>${date(e.day)}</small></span>
+      <b><bdi>${money(e.amount, cur, true)}</bdi></b>${e.extra != null
+        ? `<button type="button" class="icon pay-del" data-act="del-extra" data-i="${e.extra}" aria-label="${esc(t.remove)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : ''}
+    </li>`;
+  return `<h3 class="form-group">${t.paymentsTitle}</h3>
+    ${list.length ? `<ul class="pays">${shown.map(row).join('')}</ul>` : `<p class="hint">${t.nonePaid}</p>`}
+    ${shown.length < list.length ? `<button type="button" class="linkish" data-act="all-pays">${t.showAll(num(list.length))}</button>` : ''}
+    ${status(c, todayN).done ? '' : `<button type="button" class="secondary wide" data-act="repay">${t.addRepay}</button>`}`;
+}
+
+// --- extra repayment (#75) ------------------------------------------------------
+
+let repay = null; // { on, amount, effect } as typed
+
+function openRepay() {
+  repay = { on: todayN, amount: '', effect: 'term' };
+  renderRepay();
+  push($('repayPage'), $('repayForm').elements.amount);
+}
+
+function renderRepay(errors = {}) {
+  const { t, plain } = I;
+  const c = doc.commitments.find(x => x.id === detailId);
+  const start = dayFromISO(c.borrowedOn || c.first);
+  setTitle('repayPage', t.addRepay);
+  $('repayForm').innerHTML = `
+    <div class="split">
+      ${field('amount', t.repayAmount, text('amount', typeof repay.amount === 'number' ? plain(repay.amount) : repay.amount))}
+      ${field('on', t.repayDate, `<input type="date" name="on" class="num" value="${repay.on == null ? '' : isoFromDay(repay.on)}" min="${isoFromDay(start)}" max="${isoFromDay(todayN)}">`)}
+    </div>
+    ${field('effect', t.repayEffect, seg('effect', [['term', t.effectTerm], ['payment', t.effectPayment]], repay.effect), t.repayEffectHint)}
+    <div class="actions save-bar">
+      <button type="submit" class="primary">${t.save}</button>
+      <button type="button" class="secondary" data-back>${t.cancel}</button>
+    </div>`;
+  for (const [name, msg] of Object.entries(errors)) {
+    const f = $('repayForm').querySelector(`[data-field="${name}"]`);
+    f.classList.add('invalid');
+    f.insertAdjacentHTML('beforeend', `<small class="err">${esc(msg)}</small>`);
+  }
+}
+
+function onRepaySubmit(e) {
+  e.preventDefault();
+  const { t } = I;
+  const f = $('repayForm').elements;
+  const c = doc.commitments.find(x => x.id === detailId);
+  const v = parseNumber(f.amount.value);
+  repay = { amount: v === null || Number.isNaN(v) ? f.amount.value : v, on: f.on.value ? dayFromISO(f.on.value) : null, effect: f.effect.value };
+  const errors = {};
+  if (repay.amount === '') errors.amount = t.err.required;
+  else if (!(repay.amount > 0)) errors.amount = t.err.positive;
+  if (repay.on == null) errors.on = t.err.required;
+  else if (repay.on > todayN) errors.on = t.err.future;
+  else if (repay.on < dayFromISO(c.borrowedOn || c.first)) errors.on = t.err.beforeLoan;
+  if (Object.keys(errors).length) { renderRepay(errors); return; }
+  c.extra = [...(c.extra || []), { on: isoFromDay(repay.on), amount: repay.amount, effect: repay.effect }];
+  persist();
+  render();
+  back();
 }
 
 function renderLump() {
@@ -348,7 +443,10 @@ function openEditor(id, fromDetails = false) {
   draft = c
     ? { ...c, apr: c.apr ?? '', settleDays: c.settleDays || 0, borrowed: c.borrowed ?? '', borrowedN: c.borrowedOn ? dayFromISO(c.borrowedOn) : null,
         // Reopen the way it was entered: it always came back on Payments left (#63).
-        mode: c.countFrom === 'start' ? 'start' : 'remaining', remaining: status(c, todayN).remaining, startN: dayFromISO(c.first) }
+        mode: c.countFrom === 'start' ? 'start' : 'remaining', startN: dayFromISO(c.first),
+        // The contract's count, not the ledger's: extra repayments shorten the latter, and saving it
+        // back would move the first payment.
+        remaining: status({ ...c, extra: [] }, todayN).remaining }
     : {
         id: null, name: '', amount: '', currency: null, frequency: 'monthly', calendar: cal,
         payDay: p.d, total: '', apr: '', settleDays: 0, borrowed: '', borrowedN: null, mode: 'start', remaining: '', startN: todayN,
@@ -523,6 +621,7 @@ function onEditorSubmit(e) {
     borrowed: d.borrowed === '' ? null : d.borrowed,
     borrowedOn: d.borrowedN == null ? null : isoFromDay(d.borrowedN),
     countFrom: d.mode,
+    extra: doc.commitments.find(x => x.id === d.id)?.extra || [],
   };
   c.first = d.mode === 'start' ? firstFromStart(c, isoFromDay(d.startN)) : firstFromRemaining(c, d.remaining, todayN);
   // Known only once the first payment is: import rejects a payout after it, so the editor must too.

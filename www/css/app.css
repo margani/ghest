@@ -203,6 +203,18 @@ button.info[aria-expanded=true] { background: var(--paid); border-color: var(--p
 /* A bigger tap area than the 20px circle, without moving the layout. */
 button.info::after { content: ''; position: absolute; inset: -12px }
 button.info { position: relative }
+/* details: payments made (#75) */
+.pays { list-style: none; margin: 10px 0 0; padding: 0 }
+.pays li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px }
+.pays li:last-child { border-bottom: 0 }
+.pays .pay-what { flex: 1; min-width: 0 }
+.pays .pay-what small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--muted) }
+.pays li.extra .pay-what { font-weight: 700 }
+.pays li.extra .pay-what small { font-weight: 400 }
+.pays b { white-space: nowrap; font-weight: 700 }
+.pays .pay-del { inline-size: 32px; block-size: 32px; flex: none }
+.pays .pay-del svg { inline-size: 18px; block-size: 18px }
+button.linkish { display: block; margin: 6px 0 0; padding: 6px 0; border: 0; background: none; color: var(--paid); font: inherit; font-size: 14px; cursor: pointer }
 .form-group { font-size: 15px; font-weight: 700; margin: 26px 0 0; padding-top: 14px; border-top: 1px solid var(--line) }
 .field small.err { color: var(--err) }
 .field.invalid input, .field.invalid select { border-color: var(--err) }
