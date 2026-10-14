@@ -320,17 +320,25 @@ function openEditor(id, fromDetails = false) {
   const cal = c ? c.calendar : doc.prefs.displayCalendar;
   const p = CALENDARS[cal].toParts(todayN);
   draft = c
-    ? { ...c, apr: c.apr ?? '', settleDays: c.settleDays || 0, mode: 'remaining', remaining: status(c, todayN).remaining, startN: dayFromISO(c.first) }
+    ? { ...c, apr: c.apr ?? '', settleDays: c.settleDays || 0, borrowed: c.borrowed ?? '', borrowedN: c.borrowedOn ? dayFromISO(c.borrowedOn) : null, mode: 'remaining', remaining: status(c, todayN).remaining, startN: dayFromISO(c.first) }
     : {
         id: null, name: '', amount: '', currency: null, frequency: 'monthly', calendar: cal,
-        payDay: p.d, total: '', apr: '', settleDays: 0, mode: 'start', remaining: '', startN: todayN,
+        payDay: p.d, total: '', apr: '', settleDays: 0, borrowed: '', borrowedN: null, mode: 'start', remaining: '', startN: todayN,
       };
+  draft.bParts = bornParts(draft);
   draft.wd = draft.frequency === 'weekly' ? draft.payDay : weekday(todayN);
   draft.md = draft.frequency === 'monthly' ? draft.payDay : p.d;
   draft.yd = draft.frequency === 'yearly' ? draft.payDay : { m: p.m, d: p.d };
   editorFromDetails = fromDetails;
   renderEditor();
   push($('editor'), c ? null : $('editForm').elements.name);
+}
+
+/** Payout date as select values in the draft's calendar; blank when not given. */
+function bornParts(d) {
+  if (d.borrowedN == null || Number.isNaN(d.borrowedN)) return { d: '', m: '', y: '' };
+  const p = CALENDARS[d.calendar].toParts(d.borrowedN);
+  return { d: p.d, m: p.m, y: p.y };
 }
 
 function renderEditor(errors = {}) {
@@ -355,6 +363,12 @@ function renderEditor(errors = {}) {
     yearly: field('yd', t.payYearDay, `<div class="split">${sel('ydd', days(31), d.yd.d)}${sel('ydm', months, d.yd.m)}</div>`, t.payMonthDayHint),
   }[d.frequency];
 
+  // The payout date may stay empty, so each part has a blank first option.
+  const bp = d.bParts;
+  const blank = opts => [['', '—'], ...opts];
+  const borrowedOn = field('borrowedOn', t.borrowedOn, `<div class="split3">${
+    sel('bd', blank(days(bp.m && bp.y ? C.monthLength(+bp.y, +bp.m) : 31)), bp.d)}${sel('bm', blank(months), bp.m)}${sel('by', blank(years), bp.y)}</div>`, t.borrowedHint);
+
   const when = d.mode === 'start'
     ? field('start', t.startDate, `<div class="split3">${sel('sd', days(C.monthLength(sp.y, sp.m)), sp.d)}${sel('sm', months, sp.m)}${sel('sy', years, sp.y)}</div>`, t.startHint)
     : field('remaining', t.remaining, text('remaining', n(d.remaining), 'num', 'numeric'), t.remainingHint);
@@ -375,6 +389,8 @@ function renderEditor(errors = {}) {
     </div>
     <small class="hint row-hint">${esc(t.aprHint)}</small>
     ${field('settleDays', t.settleDays, text('settleDays', n(d.settleDays), 'num', 'numeric'), t.settleDaysHint)}
+    ${field('borrowed', t.borrowed, text('borrowed', n(d.borrowed)))}
+    ${borrowedOn}
     ${field('mode', t.mode, seg('mode', [['start', t.fromStart], ['remaining', t.fromRemaining]], d.mode))}
     ${when}
     <div class="actions save-bar">
@@ -402,6 +418,12 @@ function collect() {
   d.total = numOr(val('total'));
   d.apr = numOr(val('apr'));
   d.settleDays = numOr(val('settleDays'));
+  d.borrowed = numOr(val('borrowed'));
+  const [bd, bm, by] = [val('bd'), val('bm'), val('by')];
+  d.bParts = { d: bd, m: bm, y: by };
+  // A part-filled date is NaN so validation can name it; all empty means "not given".
+  d.borrowedN = !bd && !bm && !by ? null : bd && bm && by
+    ? CALENDARS[d.calendar].fromParts(+by, +bm, Math.min(+bd, CALENDARS[d.calendar].monthLength(+by, +bm))) : NaN;
   if (f.wd) d.wd = +val('wd');
   if (f.md) d.md = numOr(val('md'));
   if (f.ydd) d.yd = { d: numOr(val('ydd')), m: +val('ydm') };
@@ -425,6 +447,10 @@ function validateDraft() {
   else if (!isInt(d.total, 1, 100000)) e.total = Number.isInteger(d.total) ? t.err.positive : t.err.integer;
   if (d.apr !== '' && !(d.apr >= 0 && d.apr < 1000)) e.apr = t.err.nonneg;
   if (d.settleDays !== '' && !isInt(d.settleDays, 0, 365)) e.settleDays = t.err.range(num(0), num(365));
+  if (d.borrowed !== '' && !(d.borrowed > 0)) e.borrowed = t.err.positive;
+  if (Number.isNaN(d.borrowedN)) e.borrowedOn = t.err.date;
+  else if (d.borrowed !== '' && d.borrowedN == null) e.borrowedOn = t.err.required;
+  else if (d.borrowed === '' && d.borrowedN != null) e.borrowed = t.err.required;
   if (d.frequency === 'monthly' && !isInt(d.md, 1, 31)) e.md = t.err.range(num(1), num(31));
   if (d.frequency === 'yearly' && !isInt(d.yd.d, 1, 31)) e.yd = t.err.range(num(1), num(31));
   if (d.mode === 'start' && d.startN == null) e.start = t.err.date;
@@ -438,7 +464,7 @@ function validateDraft() {
 
 function onEditorChange(e) {
   // sm/sy change the length of the start month, so the day list is rebuilt.
-  if (!['frequency', 'calendar', 'mode', 'sm', 'sy'].includes(e.target.name)) return;
+  if (!['frequency', 'calendar', 'mode', 'sm', 'sy', 'bm', 'by'].includes(e.target.name)) return;
   collect();
   const d = draft;
   if (e.target.name === 'calendar') {
@@ -446,8 +472,8 @@ function onEditorChange(e) {
     d.calendar = e.target.value;
     // Keep the same real-world day for the start date; re-express pay days in the new calendar.
     const ref = CALENDARS[d.calendar].toParts(d.startN ?? todayN);
-    if (prevCal !== d.calendar) { d.md = ref.d; d.yd = { m: ref.m, d: ref.d }; }
-  } else if (e.target.name !== 'sm' && e.target.name !== 'sy') {
+    if (prevCal !== d.calendar) { d.md = ref.d; d.yd = { m: ref.m, d: ref.d }; d.bParts = bornParts(d); }
+  } else if (!['sm', 'sy', 'bm', 'by'].includes(e.target.name)) {
     d[e.target.name] = e.target.value;
   }
   renderEditor();
@@ -474,8 +500,16 @@ function onEditorSubmit(e) {
     total: d.total,
     apr: d.apr === '' || d.apr === 0 ? null : d.apr,
     settleDays: d.settleDays || 0,
+    borrowed: d.borrowed === '' ? null : d.borrowed,
+    borrowedOn: d.borrowedN == null ? null : isoFromDay(d.borrowedN),
   };
   c.first = d.mode === 'start' ? firstFromStart(c, isoFromDay(d.startN)) : firstFromRemaining(c, d.remaining, todayN);
+  // Known only once the first payment is: import rejects a payout after it, so the editor must too.
+  if (c.borrowedOn && c.borrowedOn > c.first) {
+    renderEditor({ borrowedOn: I.t.err.afterFirst });
+    $('editForm').querySelector('.invalid')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return;
+  }
   const i = doc.commitments.findIndex(x => x.id === c.id);
   if (i >= 0) doc.commitments[i] = c; else doc.commitments.push(c);
   persist();

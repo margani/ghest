@@ -289,3 +289,28 @@ test('payoff: days past the last payment leave nothing to discount', () => {
   near(p.amount, 134.57);
   near(p.saved, 0);
 });
+
+// With the advance and its date (#54), the payoff follows the regulations exactly: the
+// example's £5,000 paid out one month before the first instalment gives its own figures,
+// without the 6p from the rounded instalment.
+const ukAdvance = { ...ukExample, borrowed: 5000, borrowedOn: '2024-09-01' };
+
+test('payoff from the advance: the regulation example to the penny', () => {
+  const p = payoff(ukAdvance, D('2025-09-01'), 28);
+  near(p.amount, 4024.81); // example: 3,984.00 × 1.010979^(28/30)
+  near(p.amount, 3984.00 * 1.010979 ** (28 / 30), 0.01);
+});
+
+test('payoff from the advance: an earlier payout adds its interest to the settlement date', () => {
+  // Paid out 2024-08-15 instead of 2024-09-01: 17 more days, in a 31-day period (Aug 1 → Sep 1).
+  const r = periodicRate(14, 'monthly');
+  const late = payoff(ukAdvance, D('2025-09-01'), 28).amount;
+  const early = payoff({ ...ukAdvance, borrowedOn: '2024-08-15' }, D('2025-09-01'), 28).amount;
+  const periods = 12 + 28 / 30; // 2024-09-01 (one period before #0) → 2025-09-29
+  near(early - late, 5000 * (1 + r) ** periods * ((1 + r) ** (17 / 31) - 1));
+});
+
+test('payoff from the advance: an instalment due before settlement is paid in full', () => {
+  const p = payoff(ukAdvance, D('2025-09-01'), 58);
+  near(p.amount, 134.57 + 3893.17 * 1.010979 ** (28 / 31)); // example's balance after the 13th
+});
