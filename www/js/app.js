@@ -320,37 +320,19 @@ function openEditor(id, fromDetails = false) {
   const cal = c ? c.calendar : doc.prefs.displayCalendar;
   const p = CALENDARS[cal].toParts(todayN);
   draft = c
-    ? { ...c, apr: c.apr ?? '', settleDays: c.settleDays || 0, borrowed: c.borrowed ?? '', borrowedN: c.borrowedOn ? dayFromISO(c.borrowedOn) : null, mode: 'remaining', remaining: status(c, todayN).remaining, startN: dayFromISO(c.first) }
+    ? { ...c, apr: c.apr ?? '', settleDays: c.settleDays || 0, borrowed: c.borrowed ?? '', borrowedN: c.borrowedOn ? dayFromISO(c.borrowedOn) : null,
+        // Reopen the way it was entered: it always came back on Payments left (#63).
+        mode: c.countFrom === 'start' ? 'start' : 'remaining', remaining: status(c, todayN).remaining, startN: dayFromISO(c.first) }
     : {
         id: null, name: '', amount: '', currency: null, frequency: 'monthly', calendar: cal,
         payDay: p.d, total: '', apr: '', settleDays: 0, borrowed: '', borrowedN: null, mode: 'start', remaining: '', startN: todayN,
       };
-  draft.bText = bornText(draft);
   draft.wd = draft.frequency === 'weekly' ? draft.payDay : weekday(todayN);
   draft.md = draft.frequency === 'monthly' ? draft.payDay : p.d;
   draft.yd = draft.frequency === 'yearly' ? draft.payDay : { m: p.m, d: p.d };
   editorFromDetails = fromDetails;
   renderEditor();
   push($('editor'), c ? null : $('editForm').elements.name);
-}
-
-/** Payout date as typed text, y/m/d in the draft's calendar; empty when not given. */
-function bornText(d) {
-  if (d.borrowedN == null || Number.isNaN(d.borrowedN)) return '';
-  return ymd(CALENDARS[d.calendar].toParts(d.borrowedN));
-}
-
-const two = v => (v < 10 ? I.plain(0) : '') + I.plain(v);
-const ymd = p => `${I.plain(p.y)}/${two(p.m)}/${two(p.d)}`;
-
-/** y/m/d (any separator, Persian or Latin digits) to a day number; null if empty, NaN if not a real date. */
-function parseYMD(s, calendar) {
-  const parts = String(s ?? '').trim().split(/[\/\-.\s]+/).filter(Boolean).map(parseNumber);
-  if (!parts.length) return null;
-  const [y, m, d] = parts;
-  const C = CALENDARS[calendar], [lo, hi] = YEAR_RANGE[calendar];
-  const ok = parts.length === 3 && parts.every(Number.isInteger) && y >= lo && y <= hi && m >= 1 && m <= 12 && d >= 1 && d <= C.monthLength(y, m);
-  return ok ? C.fromParts(y, m, d) : NaN;
 }
 
 function renderEditor(errors = {}) {
@@ -375,9 +357,13 @@ function renderEditor(errors = {}) {
     yearly: field('yd', t.payYearDay, `<div class="split">${sel('ydd', days(31), d.yd.d)}${sel('ydm', months, d.yd.m)}</div>`, t.payMonthDayHint),
   }[d.frequency];
 
-  // Typed, not picked: it is copied from a statement, and three dropdowns were big and awkward (#56).
+  // A calendar picker, as asked (#62); dropdowns were big and typing was awkward (#56). The native
+  // picker is Gregorian, so a Solar or Lunar Hijri commitment also shows the date in its own calendar.
+  const bp = d.borrowedN == null ? null : C.toParts(d.borrowedN);
   const borrowedOn = field('borrowedOn', t.borrowedOn,
-    text('borrowedOn', d.bText, 'num', 'text').replace('>', ` placeholder="${esc(ymd(C.toParts(todayN)))}">`), t.borrowedHint);
+    `<input type="date" name="borrowedOn" class="num" value="${d.borrowedN == null ? '' : isoFromDay(d.borrowedN)}" max="${isoFromDay(todayN)}">${
+      bp && d.calendar !== 'gregorian' ? `<small class="hint cal-echo">${num(bp.d)} ${esc(monthNames(d.calendar)[bp.m - 1])} ${plain(bp.y)}</small>` : ''}`,
+    t.borrowedHint);
 
   const when = d.mode === 'start'
     ? field('start', t.startDate, `<div class="split3">${sel('sd', days(C.monthLength(sp.y, sp.m)), sp.d)}${sel('sm', months, sp.m)}${sel('sy', years, sp.y)}</div>`, t.startHint)
@@ -429,8 +415,7 @@ function collect() {
   d.apr = numOr(val('apr'));
   d.settleDays = numOr(val('settleDays'));
   d.borrowed = numOr(val('borrowed'));
-  d.bText = val('borrowedOn');
-  d.borrowedN = parseYMD(d.bText, d.calendar); // NaN keeps the text so validation can name it
+  d.borrowedN = val('borrowedOn') ? dayFromISO(val('borrowedOn')) : null;
   if (f.wd) d.wd = +val('wd');
   if (f.md) d.md = numOr(val('md'));
   if (f.ydd) d.yd = { d: numOr(val('ydd')), m: +val('ydm') };
@@ -455,8 +440,7 @@ function validateDraft() {
   if (d.apr !== '' && !(d.apr >= 0 && d.apr < 1000)) e.apr = t.err.nonneg;
   if (d.settleDays !== '' && !isInt(d.settleDays, 0, 365)) e.settleDays = t.err.range(num(0), num(365));
   if (d.borrowed !== '' && !(d.borrowed > 0)) e.borrowed = t.err.positive;
-  if (Number.isNaN(d.borrowedN)) e.borrowedOn = t.err.date;
-  else if (d.borrowed !== '' && d.borrowedN == null) e.borrowedOn = t.err.required;
+  if (d.borrowed !== '' && d.borrowedN == null) e.borrowedOn = t.err.required;
   else if (d.borrowed === '' && d.borrowedN != null) e.borrowed = t.err.required;
   if (d.frequency === 'monthly' && !isInt(d.md, 1, 31)) e.md = t.err.range(num(1), num(31));
   if (d.frequency === 'yearly' && !isInt(d.yd.d, 1, 31)) e.yd = t.err.range(num(1), num(31));
@@ -471,7 +455,7 @@ function validateDraft() {
 
 function onEditorChange(e) {
   // sm/sy change the length of the start month, so the day list is rebuilt.
-  if (!['frequency', 'calendar', 'mode', 'sm', 'sy'].includes(e.target.name)) return;
+  if (!['frequency', 'calendar', 'mode', 'sm', 'sy', 'borrowedOn'].includes(e.target.name)) return;
   collect();
   const d = draft;
   if (e.target.name === 'calendar') {
@@ -479,8 +463,8 @@ function onEditorChange(e) {
     d.calendar = e.target.value;
     // Keep the same real-world day for the start date; re-express pay days in the new calendar.
     const ref = CALENDARS[d.calendar].toParts(d.startN ?? todayN);
-    if (prevCal !== d.calendar) { d.md = ref.d; d.yd = { m: ref.m, d: ref.d }; if (!Number.isNaN(d.borrowedN)) d.bText = bornText(d); }
-  } else if (e.target.name !== 'sm' && e.target.name !== 'sy') {
+    if (prevCal !== d.calendar) { d.md = ref.d; d.yd = { m: ref.m, d: ref.d }; }
+  } else if (!['sm', 'sy', 'borrowedOn'].includes(e.target.name)) {
     d[e.target.name] = e.target.value;
   }
   renderEditor();
@@ -509,6 +493,7 @@ function onEditorSubmit(e) {
     settleDays: d.settleDays || 0,
     borrowed: d.borrowed === '' ? null : d.borrowed,
     borrowedOn: d.borrowedN == null ? null : isoFromDay(d.borrowedN),
+    countFrom: d.mode,
   };
   c.first = d.mode === 'start' ? firstFromStart(c, isoFromDay(d.startN)) : firstFromRemaining(c, d.remaining, todayN);
   // Known only once the first payment is: import rejects a payout after it, so the editor must too.
