@@ -316,8 +316,10 @@ function seg(name, options, value) {
     `<label><input type="radio" name="${name}" value="${v}"${String(v) === String(value) ? ' checked' : ''}><span>${esc(label)}</span></label>`).join('')}</div>`;
 }
 
+// Help sits behind an (i) by the label, not under every input, which crowded the form (#69).
 function field(name, label, control, hint = '') {
-  return `<div class="field" data-field="${name}"><label>${esc(label)}</label>${control}${hint ? `<small class="hint">${esc(hint)}</small>` : ''}</div>`;
+  const info = hint ? `<button type="button" class="info" aria-expanded="false" aria-label="${esc(I.t.help)}">i</button>` : '';
+  return `<div class="field" data-field="${name}"><label>${esc(label)}${info}</label>${control}${hint ? `<small class="hint" data-hint="${name}" hidden>${esc(hint)}</small>` : ''}</div>`;
 }
 
 const text = (name, value, cls = 'num', mode = 'decimal') =>
@@ -381,8 +383,7 @@ function renderEditor(errors = {}) {
   const bp = d.borrowedN == null ? null : C.toParts(d.borrowedN);
   const borrowedOn = field('borrowedOn', t.borrowedOn,
     `<input type="date" name="borrowedOn" class="num" value="${d.borrowedN == null ? '' : isoFromDay(d.borrowedN)}" max="${isoFromDay(todayN)}">${
-      bp && d.calendar !== 'gregorian' ? `<small class="hint cal-echo">${num(bp.d)} ${esc(monthNames(d.calendar)[bp.m - 1])} ${plain(bp.y)}</small>` : ''}`,
-    t.borrowedHint);
+      bp && d.calendar !== 'gregorian' ? `<small class="cal-echo">${num(bp.d)} ${esc(monthNames(d.calendar)[bp.m - 1])} ${plain(bp.y)}</small>` : ''}`);
 
   const when = d.mode === 'start'
     ? field('start', t.startDate, `<div class="split3">${sel('sd', days(C.monthLength(sp.y, sp.m)), sp.d)}${sel('sm', months, sp.m)}${sel('sy', years, sp.y)}</div>`, t.startHint)
@@ -395,19 +396,23 @@ function renderEditor(errors = {}) {
       ${field('amount', t.amount, text('amount', n(d.amount)))}
       ${field('currency', t.currency, `<select name="currency">${currencyOptions(d.currency, true)}</select>`)}
     </div>
-    ${field('frequency', t.frequency, sel('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency))}
+    ${d.frequency === 'yearly' || d.frequency === 'daily'
+      // A day and a month don't fit in half a row; daily has no pay day.
+      ? field('frequency', t.frequency, sel('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency)) + payDay
+      : `<div class="split">${field('frequency', t.frequency, sel('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency))}${payDay}</div>`}
     ${field('calendar', t.calendar, seg('calendar', CAL_ORDER.map(c => [c, t.cal[c]]), d.calendar), d.calendar === 'hijri' ? t.hijriHint : '')}
-    ${payDay}
-    <div class="split">
-      ${field('total', t.total, text('total', n(d.total), 'num', 'numeric'))}
-      ${field('apr', t.aprField, text('apr', n(d.apr)))}
-    </div>
-    <small class="hint row-hint">${esc(t.aprHint)}</small>
-    ${field('settleDays', t.settleDays, text('settleDays', n(d.settleDays), 'num', 'numeric'), t.settleDaysHint)}
-    ${field('borrowed', t.borrowed, text('borrowed', n(d.borrowed)))}
-    ${borrowedOn}
+    ${field('total', t.total, text('total', n(d.total), 'num', 'numeric'))}
     ${field('mode', t.mode, seg('mode', [['start', t.fromStart], ['remaining', t.fromRemaining]], d.mode))}
     ${when}
+    <h3 class="form-group">${esc(t.interestGroup)}</h3>
+    <div class="split">
+      ${field('apr', t.aprField, text('apr', n(d.apr)), t.aprHint)}
+      ${field('settleDays', t.settleDays, text('settleDays', n(d.settleDays), 'num', 'numeric'), t.settleDaysHint)}
+    </div>
+    <div class="split">
+      ${field('borrowed', t.borrowed, text('borrowed', n(d.borrowed)), t.borrowedHint)}
+      ${borrowedOn}
+    </div>
     <div class="actions save-bar">
       <button type="submit" class="primary">${t.save}</button>
       ${d.id ? `<button type="button" class="danger" data-act="delete">${t.del}</button>` : `<button type="button" class="secondary" data-back>${t.cancel}</button>`}
@@ -529,6 +534,18 @@ function onEditorSubmit(e) {
 }
 
 function onEditorClick(e) {
+  const info = e.target.closest('button.info');
+  if (info) {
+    const field = info.closest('.field');
+    const hint = $('editForm').querySelector(`small.hint[data-hint="${field.dataset.field}"]`);
+    // In a two-column row the open text goes under the whole row: inside one column it
+    // stretched that column and pushed the other column's input down.
+    const row = field.parentElement;
+    if (row.classList.contains('split') && hint.parentElement !== $('editForm')) row.after(hint);
+    hint.hidden = !hint.hidden;
+    info.setAttribute('aria-expanded', String(!hint.hidden));
+    return;
+  }
   if (e.target.closest('[data-act=delete]') && confirm(I.t.confirmDelete(draft.name))) {
     doc.commitments = doc.commitments.filter(c => c.id !== draft.id);
     persist();
