@@ -224,24 +224,35 @@ export function payments(c, todayN) {
 }
 
 /**
- * Effect of paying `lump` off this commitment today, keeping the payment fixed
- * and shortening the term. Returns null if the commitment has no interest left.
+ * Effect of paying `lump` off this commitment today. It settles the loan only at the payoff amount
+ * (the lender's extra days included), and then saves what payoff() says. A smaller sum first covers
+ * the instalments due by the settlement date; the rest is an extra repayment on that date that keeps
+ * the instalment and shortens the term. Before, a loan took only its principal and was called paid
+ * off, below the payoff figure on its own page (#77). Returns null if there is no interest left.
  */
 export function lumpSum(c, todayN, lump) {
   const s = status(c, todayN);
   if (s.done || !s.rate) return null;
-  const applied = Math.min(lump, s.principal);
-  const before = simulate(s.principal, s.rate, s.amount);
-  const after = simulate(s.principal - applied, s.rate, s.amount);
-  const periodsCut = before.periods - after.periods;
-  const newEnd = after.periods > 0 ? paymentDay(c, s.paid + after.periods - 1) : todayN;
+  const days = c.settleDays || 0;
+  const po = payoff(c, todayN, days);
+  const settle = todayN + days;
+  if (lump >= po.amount - 1e-6) {
+    const cut = s.remaining - po.dueCount;
+    const newEnd = po.dueCount ? (s.next != null ? paymentDay(c, s.paid + po.dueCount - 1) : todayN) : todayN;
+    return { applied: po.amount, settles: true, saved: po.saved, periodsCut: cut,
+      monthsCut: monthsBetween(c.frequency, cut, newEnd, s.end), newEnd };
+  }
+  const x = lump - po.due;
+  if (x <= 1e-9) return { applied: lump, settles: false, saved: 0, periodsCut: 0, monthsCut: 0, newEnd: s.end };
+  const s2 = status({ ...c, extra: [...(c.extra || []), { on: isoFromDay(settle), amount: x, effect: 'term' }] }, todayN);
+  const cut = s.remaining - s2.remaining;
   return {
-    applied,
-    settles: applied >= s.principal - 1e-6,
-    saved: before.interest - after.interest,
-    periodsCut,
-    monthsCut: monthsBetween(c.frequency, periodsCut, newEnd, s.end),
-    newEnd,
+    applied: lump,
+    settles: false,
+    saved: s.owed - s2.owed - x,
+    periodsCut: cut,
+    monthsCut: monthsBetween(c.frequency, cut, s2.end, s.end),
+    newEnd: s2.end,
   };
 }
 
@@ -255,9 +266,10 @@ export function allocate(cs, todayN, lump) {
     .map(c => ({ c, s: status(c, todayN) }))
     .filter(({ s }) => !s.done && s.rate)
     .sort((a, b) => b.c.apr - a.c.apr || a.s.principal - b.s.principal);
+  // Each loan takes up to its payoff amount, the figure its details page shows (#77).
   let left = lump, saved = 0;
   const rows = order.map(({ c, s }) => {
-    const give = Math.min(left, s.principal);
+    const give = Math.min(left, payoff(c, todayN, c.settleDays || 0).amount);
     left -= give;
     const r = give > 0 ? lumpSum(c, todayN, give) : null;
     if (r) saved += r.saved;
@@ -280,18 +292,19 @@ export function payoff(c, todayN, extraDays = 0) {
   if (c.extra?.length) {
     // Instalments due by the settlement date in full, then the ledger's balance grown to that date.
     const { events, start } = ledger(c);
-    let amount = 0, last = null;
+    let amount = 0, last = null, dueCount = 0;
     for (const e of events) {
       if (e.day > settle) break;
-      if (e.day > todayN && e.k != null) amount += e.amount;
+      if (e.day > todayN && e.k != null) { amount += e.amount; dueCount++; }
       last = e;
     }
+    const due = amount;
     const open = events.some(e => e.day > settle && e.k != null);
     if (open) {
       const [from, bal] = !last ? [start.pos, start.balance] : [last.k != null ? last.k : periodsAt(c, last.day), last.balance];
       amount += bal * Math.pow(1 + s.rate, periodsAt(c, settle) - from);
     }
-    return { amount, saved: s.owed - amount };
+    return { amount, saved: s.owed - amount, due, dueCount };
   }
   const due = paidCount(c, settle); // payments made by the settlement date
   let amount = (due - s.paid) * c.amount;
@@ -308,7 +321,7 @@ export function payoff(c, todayN, extraDays = 0) {
       amount += presentValue(s.rate, c.total - due, c.amount) * grow(at - (due - 1));
     }
   }
-  return { amount, saved: s.owed - amount };
+  return { amount, saved: s.owed - amount, due: (due - s.paid) * c.amount, dueCount: due - s.paid };
 }
 
 /** Where day `x` falls on the payment grid, in periods from payment #0; part periods by days in that period. */

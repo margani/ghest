@@ -217,8 +217,11 @@ test('lump sum larger than the balance settles it', () => {
   const s = status(c, todayN);
   const r = lumpSum(c, todayN, 1e6);
   assert.equal(r.settles, true);
-  near(r.applied, s.principal);
-  near(r.saved, s.interest);
+  // Between instalments, settling costs the principal plus interest to today, as on the details page (#77).
+  const po = payoff(c, todayN, 0);
+  assert.ok(po.amount > s.principal);
+  near(r.applied, po.amount, 1e-9);
+  near(r.saved, po.saved, 1e-9);
   assert.equal(r.periodsCut, 5);
   assert.equal(r.newEnd, todayN);
 });
@@ -315,13 +318,13 @@ test('payoff from the advance: an instalment due before settlement is paid in fu
   near(p.amount, 134.57 + 3893.17 * 1.010979 ** (28 / 31)); // example's balance after the 13th
 });
 
-// Lump sum split across loans (#59): highest APR first, each gets up to its principal left,
+// Lump sum split across loans (#59): highest APR first, each gets up to its payoff amount (#77),
 // the rest flows on to the next.
 test('allocate: highest APR first, the rest flows to the next', () => {
   const today = D('2026-01-15');
   const mk = (id, apr, amount, total) => ({ id, amount, frequency: 'monthly', calendar: 'gregorian', payDay: 1, total, apr, first: '2025-01-01' });
   const cheap = mk('cheap', 5, 300, 48), dear = mk('dear', 20, 100, 24), mid = mk('mid', 10, 200, 36);
-  const p = c => status(c, today).principal;
+  const p = c => payoff(c, today, 0).amount;
   const lump = p(dear) + 1000;
   const a = allocate([cheap, dear, mid], today, lump);
   assert.ok(a.rows.length === 3);
@@ -340,8 +343,8 @@ test('allocate: more than everything settles all and reports the rest', () => {
   const today = D('2026-01-15');
   const c = { amount: 100, frequency: 'monthly', calendar: 'gregorian', payDay: 1, total: 12, apr: 10, first: '2025-06-01' };
   const a = allocate([c], today, 5000);
-  near(a.rows[0].give, status(c, today).principal, 1e-9);
-  near(a.left, 5000 - status(c, today).principal, 1e-9);
+  near(a.rows[0].give, payoff(c, today, 0).amount, 1e-9);
+  near(a.left, 5000 - payoff(c, today, 0).amount, 1e-9);
   assert.deepEqual(allocate([], today, 100), { rows: [], left: 100, saved: 0 });
 });
 
@@ -404,4 +407,35 @@ test('payments list: instalments made, newest first, with the extras among them'
   const rows = payments(c, D('2025-03-01'));
   assert.deepEqual(rows.map(r => [iso(r.day), r.amount, r.extra ?? null]),
     [['2025-03-01', 100, null], ['2025-02-10', 300, 0], ['2025-02-01', 100, null], ['2025-01-01', 100, null]]);
+});
+
+// The lump-sum page gave a loan its principal and said it was paid off, while the details page
+// asked for more to settle it (#77): a share settles only at the payoff amount, extra days included.
+test('lump sum: settling takes the payoff amount with the extra days, and saves what payoff says', () => {
+  const c = { ...ukAdvance, settleDays: 58 };
+  const today = D('2025-09-01');
+  const po = payoff(c, today, 58);
+  const r = lumpSum(c, today, 1e6);
+  assert.ok(r.settles);
+  near(r.applied, po.amount, 1e-9);
+  near(r.saved, po.saved, 1e-9);
+  const a = allocate([c], today, 20000);
+  near(a.rows[0].give, po.amount, 1e-9);
+  near(a.left, 20000 - po.amount, 1e-9);
+  near(a.saved, po.saved, 1e-9);
+});
+
+test('lump sum: just under the payoff saves just under what settling does, and more money saves more', () => {
+  const c = { ...ukAdvance, settleDays: 58 };
+  const today = D('2025-09-01');
+  const po = payoff(c, today, 58);
+  const under = lumpSum(c, today, po.amount - 1);
+  assert.ok(!under.settles);
+  assert.ok(under.saved < po.saved && under.saved > po.saved - 5, `${under.saved} vs ${po.saved}`);
+  let prev = 0;
+  for (const x of [300, 1000, 2000, 3000, 4000]) {
+    const r = lumpSum(c, today, x);
+    assert.ok(r.saved > prev, `${x}: ${r.saved}`);
+    prev = r.saved;
+  }
 });
