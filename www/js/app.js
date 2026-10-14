@@ -4,13 +4,12 @@ import { LANGS, makeI18n, currencies, parseNumber, guessDefaults } from './i18n.
 import { load, save, exportFile, parseImport } from './store.js';
 import { Capacitor, registerPlugin, SystemBars } from './vendor/capacitor-core.js';
 import { initNav, push, back, isOpen, depth } from './nav.js';
-import { initPwa, applyUpdate, isBrowser, standalone, iosManualInstall, canPromptInstall, promptInstall, requestPersistentStorage } from './pwa.js';
+import { initPwa, applyUpdate, isBrowser, iosManualInstall, canPromptInstall, promptInstall, requestPersistentStorage } from './pwa.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const CAL_ORDER = ['jalali', 'gregorian', 'hijri'];
 const YEAR_RANGE = { gregorian: [1900, 2200], jalali: [1280, 1580], hijri: [1320, 1590] };
-const THEME_ORDER = ['system', 'light', 'dark'];
 const THEME_BG = { light: '#EDF0F3', dark: '#121821' }; // --bg in app.css, for the browser's toolbar
 const deviceDark = matchMedia('(prefers-color-scheme: dark)');
 const NativeTheme = Capacitor.isNativePlatform() ? registerPlugin('Theme') : null; // ThemePlugin.java
@@ -34,6 +33,7 @@ async function init() {
   render();
 
   $('addBtn').onclick = () => openEditor(null);
+  $('installBtn').onclick = promptInstall;
   $('settingsBtn').onclick = openSettings;
   $('themeBtn').onclick = () => {
     // Flip what is on screen; System becomes an explicit choice, as if picked in Settings.
@@ -65,7 +65,7 @@ async function init() {
 
   initPwa({
     updateReady: () => { $('updateBtn').hidden = false; },
-    installChanged: () => { if (isOpen($('settings'))) renderSettings(); },
+    installChanged: () => { $('installBtn').hidden = !canPromptInstall(); },
   });
   $('updateBtn').onclick = applyUpdate;
 
@@ -133,7 +133,8 @@ function render() {
   const { t } = I;
   $('brand').textContent = t.app;
   $('settingsBtn').setAttribute('aria-label', t.settings);
-  $('addBtn').textContent = t.add;
+  $('addBtn').setAttribute('aria-label', t.add);
+  $('installBtn').setAttribute('aria-label', t.installBtn);
   $('updateBtn').textContent = t.updateBtn;
   $('foot').textContent = doc.commitments.length ? t.foot : '';
   $('lumpBtn').textContent = t.lumpTitle;
@@ -376,7 +377,7 @@ function renderEditor(errors = {}) {
       ${field('amount', t.amount, text('amount', n(d.amount)))}
       ${field('currency', t.currency, `<select name="currency">${currencyOptions(d.currency, true)}</select>`)}
     </div>
-    ${field('frequency', t.frequency, seg('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency))}
+    ${field('frequency', t.frequency, sel('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency))}
     ${field('calendar', t.calendar, seg('calendar', CAL_ORDER.map(c => [c, t.cal[c]]), d.calendar), d.calendar === 'hijri' ? t.hijriHint : '')}
     ${payDay}
     <div class="split">
@@ -530,7 +531,6 @@ function renderSettings() {
   $('settingsBody').innerHTML = `
     ${field('lang', t.language, seg('lang', [['fa', 'فارسی'], ['en', 'English']], doc.prefs.lang))}
     ${field('displayCalendar', t.displayCalendar, seg('displayCalendar', CAL_ORDER.map(c => [c, t.cal[c]]), doc.prefs.displayCalendar))}
-    ${field('theme', t.theme, seg('theme', THEME_ORDER.map(v => [v, t.themes[v]]), doc.prefs.theme))}
     ${field('currency', t.defaultCurrency, `<select name="currency">${currencyOptions(doc.prefs.currency, false)}</select>`)}
     <div class="group">
       <h2 style="font-size:16px;margin-top:14px">${t.backup}</h2>
@@ -540,10 +540,9 @@ function renderSettings() {
         <button type="button" class="secondary" data-act="import">${t.importBtn}</button>
       </div>
     </div>
-    ${isBrowser && !standalone && (canPromptInstall() || iosManualInstall) ? `<div class="group">
+    ${iosManualInstall ? `<div class="group">
       <h2 style="font-size:16px;margin-top:14px">${t.installTitle}</h2>
-      <p class="hint">${canPromptInstall() ? t.installHint : t.installIos}</p>
-      ${canPromptInstall() ? `<button type="button" class="primary wide" data-act="install">${t.installBtn}</button>` : ''}
+      <p class="hint">${t.installIos}</p>
     </div>` : ''}
     <p class="about">${isBrowser ? t.aboutWeb : t.about}</p>
     <p class="about" id="versionLine">${versionHtml()}</p>`;
@@ -561,7 +560,6 @@ $('settingsBody').addEventListener('change', e => {
     doc.prefs.displayCalendar = LANGS[value].calendar;
   } else if (name === 'displayCalendar') doc.prefs.displayCalendar = value;
   else if (name === 'currency') doc.prefs.currency = value;
-  else if (name === 'theme') doc.prefs.theme = value;
   else return;
   persist();
   applyPrefs();
@@ -572,7 +570,6 @@ $('settingsBody').addEventListener('change', e => {
 $('settingsBody').addEventListener('click', async e => {
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'import') $('importFile').click();
-  if (act === 'install') promptInstall();
   if (act === 'export') {
     try {
       await exportFile(doc, isoFromDay(today()));
