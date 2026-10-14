@@ -182,15 +182,17 @@ button.icon.back { margin: 0 }
 .split > .field > label { flex: 1 0 auto; display: flex; align-items: flex-end }
 .row-hint { display: block; font-size: 12.5px; margin: 4px 0 0 }
 .split3 { display: grid; grid-template-columns: 1fr 1.6fr 1.2fr; gap: 8px }
-.seg { display: flex; flex-wrap: wrap; gap: 6px }
-.seg label { margin: 0; flex: 1 1 auto }
+/* One joined pill per choice: separate buttons with gaps read as unrelated actions (#58). */
+.seg { display: flex; padding: 3px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg) }
+.page .seg { background: var(--surface) }
+.seg label { margin: 0; flex: 1 1 0; min-width: 0 }
 .seg input { position: absolute; opacity: 0; pointer-events: none }
 .seg span {
-  display: block; text-align: center; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line);
-  color: var(--ink); font-size: 14.5px; cursor: pointer; min-height: 44px; line-height: 24px;
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px 8px; border-radius: 999px;
+  color: var(--ink); font-size: 14.5px; cursor: pointer; min-height: 40px; line-height: 1.25;
 }
-.seg input:checked + span { background: var(--paid); border-color: var(--paid); color: var(--on-paid); font-weight: 700 }
-.seg input:focus-visible + span { outline: 2px solid var(--paid); outline-offset: 2px }
+.seg input:checked + span { background: var(--paid); color: var(--on-paid); font-weight: 700 }
+.seg input:focus-visible + span { outline: 2px solid var(--paid); outline-offset: -2px }
 .actions { display: flex; gap: 10px; margin-top: 22px }
 .actions .primary { flex: 1 }
 .group { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 4px }
