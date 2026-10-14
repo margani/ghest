@@ -16,9 +16,7 @@ const S = {
   fa: {
     app: 'قسط',
     totalTitle: 'کل بدهی باقی‌مونده',
-    totalSub: (owed, interest) => interest
-      ? `مجموع قسط‌های باقی‌مونده ${owed}، یعنی ${interest} سود دیگه در پیشه.`
-      : `مجموع قسط‌های باقی‌مونده ${owed}.`,
+    totalSub: (interest, principal) => `${interest} از این مبلغ سوده و ${principal} اصل وام.`,
     monthlyFact: 'پرداخت ماهانه‌ی فعلی',
     endFact: 'پایان همه‌ی تعهدها',
     allDone: 'همه تموم شدن',
@@ -30,6 +28,7 @@ const S = {
     hottest: '، گرون‌ترین',
     of: (a, b) => `${a} از ${b}`,
     paymentsLeft: 'قسط مونده',
+    owedLeft: 'باقی‌مونده با سود',
     principalLeft: 'اصل باقی‌مونده',
     amountLeft: 'مبلغ باقی‌مونده',
     interestLeft: 'سود باقی‌مونده',
@@ -131,9 +130,7 @@ const S = {
   en: {
     app: 'Ghest',
     totalTitle: 'Total left to repay',
-    totalSub: (owed, interest) => interest
-      ? `${owed} in remaining payments, so ${interest} of interest still to come.`
-      : `${owed} in remaining payments.`,
+    totalSub: (interest, principal) => `${interest} of it is interest, ${principal} principal.`,
     monthlyFact: 'Paying per month',
     endFact: 'Everything ends',
     allDone: 'All done',
@@ -145,6 +142,7 @@ const S = {
     hottest: ', most expensive',
     of: (a, b) => `${a} of ${b}`,
     paymentsLeft: 'payments left',
+    owedLeft: 'Left to pay, with interest',
     principalLeft: 'Principal left',
     amountLeft: 'Amount left',
     interestLeft: 'Interest left',

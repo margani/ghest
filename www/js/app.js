@@ -185,9 +185,11 @@ function renderSummary(rows) {
 
   const totals = order.map((cur, i) => {
     const g = groups.get(cur);
+    // Headline is every remaining payment, interest included: that is the figure banks call the
+    // balance left, and leading with the principal read as the app disagreeing with them (#73).
     const interest = g.interest >= 0.5 ? money(g.interest, cur) : '';
-    return `<p class="total${i ? ' more' : ''}">${money(g.principal, cur, true)}</p>
-      <p class="sub">${esc(t.totalSub(money(g.owed, cur, true), interest))}</p>`;
+    return `<p class="total${i ? ' more' : ''}">${money(g.owed, cur, true)}</p>
+      ${interest ? `<p class="sub">${esc(t.totalSub(interest, money(g.principal, cur, true)))}</p>` : ''}`;
   }).join('');
 
   return `<h1>${t.totalTitle}</h1>
@@ -222,7 +224,7 @@ function renderRow({ c, cur, s }, hot) {
   const { t, num, money, monthYear } = I;
   const meta = s.done ? t.finishedOn(monthYear(s.end)) : t.leftEnds(num(s.remaining), num(c.total), monthYear(s.end));
   return `<button type="button" class="card loan-row${hot ? ' hot' : ''}${s.done ? ' done' : ''}" data-id="${esc(c.id)}">
-    <span class="lr-top"><span class="name">${esc(c.name)}</span><span class="lr-amt">${s.done ? '' : money(s.principal, cur)}</span></span>
+    <span class="lr-top"><span class="name">${esc(c.name)}</span><span class="lr-amt">${s.done ? '' : money(s.owed, cur)}</span></span>
     <span class="mini" aria-hidden="true"><i style="inline-size:${(100 * s.paid) / c.total}%"></i></span>
     <span class="lr-meta">${esc(meta)}</span>
   </button>`;
@@ -255,12 +257,15 @@ function renderDetail({ c, cur, s }, hot) {
   return `<p class="rate${hot ? ' hot' : ''}">${rate}</p>
     <div role="img" aria-label="${esc(t.progressLabel(num(s.paid), num(c.total)))}">${progress}</div>
     <div class="nums">
-      <div><b>${t.of(num(s.remaining), num(c.total))}</b>${t.paymentsLeft}</div>
-      <div><b>${money(s.principal, cur, true)}</b>${c.apr ? t.principalLeft : t.amountLeft}</div>
-      <div><b>${c.apr ? money(s.interest, cur) : '—'}</b>${t.interestLeft}</div>
+      <div><b>${money(s.owed, cur, true)}</b>${c.apr ? t.owedLeft : t.amountLeft}</div>
+      ${c.apr ? `<div><b>${money(s.principal, cur, true)}</b>${t.principalLeft}</div>
+      <div><b>${money(s.interest, cur)}</b>${t.interestLeft}</div>` : ''}
     </div>
     <div class="nums">
+      <div><b>${t.of(num(s.remaining), num(c.total))}</b>${t.paymentsLeft}</div>
       <div><b>${money(c.amount, cur, true)}</b>${t.perPayment[c.frequency]}</div>
+    </div>
+    <div class="nums">
       <div><b>${s.next != null ? date(s.next) : t.finished}</b>${t.next}</div>
       <div><b>${monthYear(s.end)}</b>${t.end}</div>
     </div>
