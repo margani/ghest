@@ -118,7 +118,8 @@ const S = {
     },
     settings: 'تنظیمات',
     language: 'زبان',
-    displayCalendar: 'تقویم نمایش',
+    displayCalendar: 'تقویم پیش‌فرض',
+    displayCalendarHint: 'برای تعهدهای تازه و تاریخ پایان همه. تاریخ‌های هر تعهد با تقویم خودش نشون داده می‌شه.',
     defaultCurrency: 'ارز پیش‌فرض',
     themeToggle: { light: 'ظاهر روشن', dark: 'ظاهر تیره' },
     dflt: 'پیش‌فرض',
@@ -247,7 +248,8 @@ const S = {
     },
     settings: 'Settings',
     language: 'Language',
-    displayCalendar: 'Display calendar',
+    displayCalendar: 'Default calendar',
+    displayCalendarHint: 'For new commitments and the date everything ends. Each commitment’s dates use its own calendar.',
     defaultCurrency: 'Default currency',
     themeToggle: { light: 'Light theme', dark: 'Dark theme' },
     dflt: 'Default',
@@ -277,7 +279,6 @@ export function makeI18n(lang, displayCalendar) {
   const L = LANGS[lang];
   const t = S[lang];
   const loc = L.locale;
-  const dateLoc = `${loc}-u-ca-${INTL_CAL[displayCalendar]}`;
   const cache = new Map();
   const nfmt = (key, opts) => {
     let f = cache.get(key);
@@ -304,8 +305,23 @@ export function makeI18n(lang, displayCalendar) {
     }
   }
 
-  const date = n => dfmt('d', dateLoc, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(n * DAY));
-  const monthYear = n => dfmt('my', dateLoc, { month: 'long', year: 'numeric' }).format(new Date(n * DAY));
+  // A commitment's dates are shown in its own calendar (#83); the display calendar is the default.
+  const dateLoc = cal => `${loc}-u-ca-${INTL_CAL[cal]}`;
+  // Without the era: English adds "AP"/"AH" to Hijri dates, which only repeats the calendar.
+  const parts = (key, cal, opts, n) => {
+    const ps = dfmt(`${key}${cal}`, dateLoc(cal), opts).formatToParts(new Date(n * DAY));
+    const i = ps.findIndex(p => p.type === 'era');
+    return i < 0 ? ps : ps.filter((p, j) => j !== i && !(p.type === 'literal' && (j === i - 1 || j === i + 1) && !p.value.trim()));
+  };
+  const date = (n, cal = displayCalendar) =>
+    parts('d', cal, { day: 'numeric', month: 'long', year: 'numeric' }, n).map(p => p.value).join('').trim();
+  // Month first: ICU's Persian pattern for the Solar Hijri calendar is year-month ("۱۴۰۵ اسفند", #84).
+  const monthYear = (n, cal = displayCalendar) => {
+    const ps = parts('my', cal, { month: 'long', year: 'numeric' }, n);
+    if (lang !== 'fa') return ps.map(p => p.value).join('').trim();
+    const part = type => ps.find(p => p.type === type)?.value;
+    return `${part('month')} ${part('year')}`;
+  };
 
   /** Month names (1..12) of `cal`, in the UI language. */
   function monthNames(cal) {

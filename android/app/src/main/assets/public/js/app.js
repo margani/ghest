@@ -49,14 +49,12 @@ async function init() {
   $('detailsBody').onclick = e => {
     const act = e.target.closest('[data-act]');
     if (!act) return;
-    if (act.dataset.act === 'edit') openEditor(detailId, true);
-    if (act.dataset.act === 'repay') openRepay();
     if (act.dataset.act === 'all-pays') { allPays = true; renderDetails(); }
     if (act.dataset.act === 'del-extra') {
       const c = doc.commitments.find(x => x.id === detailId);
       const x = c.extra[+act.dataset.i];
       const cur = c.currency || doc.prefs.currency;
-      if (!confirm(I.t.confirmDelExtra(I.money(x.amount, cur, true), I.date(dayFromISO(x.on))))) return;
+      if (!confirm(I.t.confirmDelExtra(I.money(x.amount, cur, true), I.date(dayFromISO(x.on), c.calendar)))) return;
       c.extra = c.extra.filter((_, i) => i !== +act.dataset.i);
       persist();
       render();
@@ -69,6 +67,9 @@ async function init() {
     if (f) { f.classList.remove('invalid'); f.querySelector('.err')?.remove(); }
   });
   $('lumpBtn').onclick = () => push($('lumpPage'), $('lumpAmount'));
+  // Icons at the top of the details page (#78), not buttons under a long payments list.
+  $('editBtn').onclick = () => openEditor(detailId, true);
+  $('repayBtn').onclick = () => openRepay();
   $('lumpAmount').oninput = renderLump;
   $('lumpCurrency').onchange = renderLump;
   $('lumpRes').onchange = e => {
@@ -163,7 +164,10 @@ function render() {
   $('installBtn').setAttribute('aria-label', t.installBtn);
   $('updateBtn').textContent = t.updateBtn;
   $('foot').textContent = doc.commitments.length ? t.foot : '';
-  $('lumpBtn').textContent = t.lumpTitle;
+  for (const [id, label] of [['lumpBtn', t.lumpTitle], ['editBtn', t.edit], ['repayBtn', t.addRepay]]) {
+    $(id).setAttribute('aria-label', label);
+    $(id).title = label;
+  }
   setTitle('lumpPage', t.lumpTitle);
   setTitle('settings', t.settings);
   for (const b of document.querySelectorAll('[data-back]')) b.setAttribute('aria-label', t.back);
@@ -241,7 +245,7 @@ let hottest = null; // highest APR among active commitments, when more than one 
 /** One compact row on the home screen: what matters at a glance. */
 function renderRow({ c, cur, s }, hot) {
   const { t, num, money, monthYear } = I;
-  const meta = s.done ? t.finishedOn(monthYear(s.end)) : t.leftEnds(num(s.remaining), num(s.total), monthYear(s.end));
+  const meta = s.done ? t.finishedOn(monthYear(s.end, c.calendar)) : t.leftEnds(num(s.remaining), num(s.total), monthYear(s.end, c.calendar));
   return `<button type="button" class="card loan-row${hot ? ' hot' : ''}${s.done ? ' done' : ''}" data-id="${esc(c.id)}">
     <span class="lr-top"><span class="name">${esc(c.name)}</span><span class="lr-amt">${s.done ? '' : money(s.owed, cur)}</span></span>
     <span class="mini" aria-hidden="true"><i style="inline-size:${(100 * s.paid) / s.total}%"></i></span>
@@ -261,6 +265,7 @@ function renderDetails() {
   if (!c) return;
   const r = { c, cur: c.currency || doc.prefs.currency, s: status(c, todayN) };
   setTitle('details', c.name);
+  $('repayBtn').hidden = r.s.done;
   $('detailsBody').innerHTML = renderDetail(r, c.apr === hottest && !r.s.done);
 }
 
@@ -286,15 +291,14 @@ function renderDetail({ c, cur, s }, hot) {
       <div><b>${money(s.amount, cur, true)}</b>${t.perPayment[c.frequency]}</div>
     </div>
     <div class="nums">
-      <div><b>${s.next != null ? date(s.next) : t.finished}</b>${t.next}</div>
-      <div><b>${monthYear(s.end)}</b>${t.end}</div>
+      <div><b>${s.next != null ? date(s.next, c.calendar) : t.finished}</b>${t.next}</div>
+      <div><b>${monthYear(s.end, c.calendar)}</b>${t.end}</div>
     </div>
-    <div class="last">${t.lastPaid}: <b>${s.lastPaid != null ? date(s.lastPaid) : t.nonePaid}</b></div>
+    <div class="last">${t.lastPaid}: <b>${s.lastPaid != null ? date(s.lastPaid, c.calendar) : t.nonePaid}</b></div>
     ${po ? `<div class="last">${t.payoffNow}: <b><bdi>${money(po.amount, cur, true)}</bdi></b>${
       // Own line, amount isolated: next to the payoff amount, RTL ran the two together and read as one.
       po.saved > 0.005 ? `<small class="sub">${t.payoffSaves(`<bdi>${money(po.saved, cur, true)}</bdi>`)}</small>` : ''}</div>` : ''}
-    ${renderPayments(c, cur)}
-    <div class="actions"><button type="button" class="primary wide" data-act="edit">${t.edit}</button></div>`;
+    ${renderPayments(c, cur)}`;
 }
 
 const PAYS_SHOWN = 6;
@@ -309,14 +313,13 @@ function renderPayments(c, cur) {
   const list = payments(c, todayN);
   const shown = allPays ? list : list.slice(0, PAYS_SHOWN);
   const row = e => `<li${e.extra != null ? ' class="extra"' : ''}>
-      <span class="pay-what">${e.extra != null ? `${t.extraPay}<small>${e.effect === 'payment' ? t.effectPayment : t.effectTerm}</small>` : t.instalment}<small>${date(e.day)}</small></span>
+      <span class="pay-what">${e.extra != null ? `${t.extraPay}<small>${e.effect === 'payment' ? t.effectPayment : t.effectTerm}</small>` : t.instalment}<small>${date(e.day, c.calendar)}</small></span>
       <b><bdi>${money(e.amount, cur, true)}</bdi></b>${e.extra != null
         ? `<button type="button" class="icon pay-del" data-act="del-extra" data-i="${e.extra}" aria-label="${esc(t.remove)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : ''}
     </li>`;
   return `<h3 class="form-group">${t.paymentsTitle}</h3>
     ${list.length ? `<ul class="pays">${shown.map(row).join('')}</ul>` : `<p class="hint">${t.nonePaid}</p>`}
-    ${shown.length < list.length ? `<button type="button" class="linkish" data-act="all-pays">${t.showAll(num(list.length))}</button>` : ''}
-    ${status(c, todayN).done ? '' : `<button type="button" class="secondary wide" data-act="repay">${t.addRepay}</button>`}`;
+    ${shown.length < list.length ? `<button type="button" class="linkish" data-act="all-pays">${t.showAll(num(list.length))}</button>` : ''}`;
 }
 
 // --- extra repayment (#75) ------------------------------------------------------
@@ -466,11 +469,7 @@ function renderEditor(errors = {}) {
   const months = monthNames(d.calendar).map((n, i) => [i + 1, n]);
   // Days and years are picked, not typed: one tap opens the native picker on phones.
   const days = max => Array.from({ length: max }, (_, i) => [i + 1, num(i + 1)]);
-  const sp = C.toParts(d.startN ?? todayN);
-  const thisYear = C.toParts(todayN).y;
   const [yLo, yHi] = YEAR_RANGE[d.calendar];
-  const years = [];
-  for (let y = Math.max(yLo, Math.min(sp.y, thisYear - 40)); y <= Math.min(yHi, Math.max(sp.y, thisYear + 10)); y++) years.push([y, plain(y)]);
   const sel = (name, opts, v) => `<select name="${name}">${opts.map(([k, l]) => `<option value="${k}"${String(k) === String(v) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   const n = v => (v === '' || v == null || Number.isNaN(v) ? v ?? '' : typeof v === 'number' ? plain(v) : v);
 
@@ -483,13 +482,18 @@ function renderEditor(errors = {}) {
 
   // A calendar picker, as asked (#62); dropdowns were big and typing was awkward (#56). The native
   // picker is Gregorian, so a Solar or Lunar Hijri commitment also shows the date in its own calendar.
-  const bp = d.borrowedN == null ? null : C.toParts(d.borrowedN);
-  const borrowedOn = field('borrowedOn', t.borrowedOn,
-    `<input type="date" name="borrowedOn" class="num" value="${d.borrowedN == null ? '' : isoFromDay(d.borrowedN)}" max="${isoFromDay(todayN)}">${
-      bp && d.calendar !== 'gregorian' ? `<small class="cal-echo">${num(bp.d)} ${esc(monthNames(d.calendar)[bp.m - 1])} ${plain(bp.y)}</small>` : ''}`);
+  const echo = n => {
+    if (n == null || d.calendar === 'gregorian') return '';
+    const q = C.toParts(n);
+    return `<small class="cal-echo">${num(q.d)} ${esc(monthNames(d.calendar)[q.m - 1])} ${plain(q.y)}</small>`;
+  };
+  const datePick = (name, n, attrs = '') => `<input type="date" name="${name}" class="num" value="${n == null ? '' : isoFromDay(n)}"${attrs}>${echo(n)}`;
+  const borrowedOn = field('borrowedOn', t.borrowedOn, datePick('borrowedOn', d.borrowedN, ` max="${isoFromDay(todayN)}"`));
 
   const when = d.mode === 'start'
-    ? field('start', t.startDate, `<div class="split3">${sel('sd', days(C.monthLength(sp.y, sp.m)), sp.d)}${sel('sm', months, sp.m)}${sel('sy', years, sp.y)}</div>`, t.startHint)
+    // A calendar picker like the payout date's (#81); the three dropdowns were slow to set.
+    ? field('start', t.startDate, datePick('start', d.startN,
+        ` min="${isoFromDay(C.fromParts(yLo, 1, 1))}" max="${isoFromDay(C.fromParts(yHi, 12, 1))}"`), t.startHint)
     : field('remaining', t.remaining, text('remaining', n(d.remaining), 'num', 'numeric'), t.remainingHint);
 
   setTitle('editor', d.id ? t.editTitle : t.newTitle);
@@ -504,9 +508,11 @@ function renderEditor(errors = {}) {
       ? field('frequency', t.frequency, sel('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency)) + payDay
       : `<div class="split">${field('frequency', t.frequency, sel('frequency', FREQUENCIES.map(f => [f, t.freq[f]]), d.frequency))}${payDay}</div>`}
     ${field('calendar', t.calendar, seg('calendar', CAL_ORDER.map(c => [c, t.cal[c]]), d.calendar), d.calendar === 'hijri' ? t.hijriHint : '')}
-    ${field('total', t.total, text('total', n(d.total), 'num', 'numeric'))}
     ${field('mode', t.mode, seg('mode', [['start', t.fromStart], ['remaining', t.fromRemaining]], d.mode))}
-    ${when}
+    <div class="split">
+      ${field('total', t.total, text('total', n(d.total), 'num', 'numeric'))}
+      ${when}
+    </div>
     <h3 class="form-group">${esc(t.interestGroup)}</h3>
     <div class="split">
       ${field('apr', t.aprField, text('apr', n(d.apr)), t.aprHint)}
@@ -547,12 +553,7 @@ function collect() {
   if (f.md) d.md = numOr(val('md'));
   if (f.ydd) d.yd = { d: numOr(val('ydd')), m: +val('ydm') };
   if (f.remaining) d.remaining = numOr(val('remaining'));
-  if (f.sd) {
-    const C = CALENDARS[d.calendar];
-    const [dd, mm, yy] = [+val('sd'), +val('sm'), +val('sy')];
-    // Moving to a shorter month keeps the day valid: 31 becomes that month's last day.
-    d.startN = C.fromParts(yy, mm, Math.min(dd, C.monthLength(yy, mm)));
-  }
+  if (f.start) d.startN = val('start') ? dayFromISO(val('start')) : null;
 }
 
 function validateDraft() {
@@ -581,8 +582,8 @@ function validateDraft() {
 }
 
 function onEditorChange(e) {
-  // sm/sy change the length of the start month, so the day list is rebuilt.
-  if (!['frequency', 'calendar', 'mode', 'sm', 'sy', 'borrowedOn'].includes(e.target.name)) return;
+  // Dates re-render for the date in the commitment's own calendar under the picker.
+  if (!['frequency', 'calendar', 'mode', 'start', 'borrowedOn'].includes(e.target.name)) return;
   collect();
   const d = draft;
   if (e.target.name === 'calendar') {
@@ -591,7 +592,7 @@ function onEditorChange(e) {
     // Keep the same real-world day for the start date; re-express pay days in the new calendar.
     const ref = CALENDARS[d.calendar].toParts(d.startN ?? todayN);
     if (prevCal !== d.calendar) { d.md = ref.d; d.yd = { m: ref.m, d: ref.d }; }
-  } else if (!['sm', 'sy', 'borrowedOn'].includes(e.target.name)) {
+  } else if (!['start', 'borrowedOn'].includes(e.target.name)) {
     d[e.target.name] = e.target.value;
   }
   renderEditor();
@@ -638,18 +639,6 @@ function onEditorSubmit(e) {
 }
 
 function onEditorClick(e) {
-  const info = e.target.closest('button.info');
-  if (info) {
-    const field = info.closest('.field');
-    const hint = $('editForm').querySelector(`small.hint[data-hint="${field.dataset.field}"]`);
-    // In a two-column row the open text goes under the whole row: inside one column it
-    // stretched that column and pushed the other column's input down.
-    const row = field.parentElement;
-    if (row.classList.contains('split') && hint.parentElement !== $('editForm')) row.after(hint);
-    hint.hidden = !hint.hidden;
-    info.setAttribute('aria-expanded', String(!hint.hidden));
-    return;
-  }
   if (e.target.closest('[data-act=delete]') && confirm(I.t.confirmDelete(draft.name))) {
     doc.commitments = doc.commitments.filter(c => c.id !== draft.id);
     persist();
@@ -662,6 +651,34 @@ $('editForm').addEventListener('change', onEditorChange);
 $('editForm').addEventListener('submit', onEditorSubmit);
 $('editForm').addEventListener('click', onEditorClick);
 
+/**
+ * Help behind (i) opens as a tooltip over the form (#82). Opening it as text under the field
+ * pushed everything below it down, and in a two-column row it shifted the other column too.
+ */
+function onInfoClick(e) {
+  const form = e.currentTarget;
+  const open = form.querySelector('.tip');
+  const info = e.target.closest('button.info');
+  if (open) {
+    open.remove();
+    form.querySelector('button.info[aria-expanded=true]')?.setAttribute('aria-expanded', 'false');
+    if (!info || open.dataset.for === info.closest('.field').dataset.field) return;
+  }
+  if (!info) return;
+  const field = info.closest('.field');
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  tip.setAttribute('role', 'tooltip');
+  tip.dataset.for = field.dataset.field;
+  tip.textContent = field.querySelector('small.hint').textContent;
+  const f = form.getBoundingClientRect(), b = info.getBoundingClientRect();
+  tip.style.top = `${b.bottom - f.top + 8}px`;
+  tip.style.setProperty('--arrow', `${b.left + b.width / 2 - f.left}px`);
+  form.append(tip);
+  info.setAttribute('aria-expanded', 'true');
+}
+for (const id of ['editForm', 'repayForm', 'settingsBody']) $(id).addEventListener('click', onInfoClick);
+
 // --- settings ------------------------------------------------------------------
 
 function renderSettings() {
@@ -669,7 +686,7 @@ function renderSettings() {
   setTitle('settings', t.settings);
   $('settingsBody').innerHTML = `
     ${field('lang', t.language, seg('lang', [['fa', 'فارسی'], ['en', 'English']], doc.prefs.lang))}
-    ${field('displayCalendar', t.displayCalendar, seg('displayCalendar', CAL_ORDER.map(c => [c, t.cal[c]]), doc.prefs.displayCalendar))}
+    ${field('displayCalendar', t.displayCalendar, seg('displayCalendar', CAL_ORDER.map(c => [c, t.cal[c]]), doc.prefs.displayCalendar), t.displayCalendarHint)}
     ${field('currency', t.defaultCurrency, `<select name="currency">${currencyOptions(doc.prefs.currency, false)}</select>`)}
     <div class="group">
       <h2 style="font-size:16px;margin-top:14px">${t.backup}</h2>
