@@ -51,6 +51,7 @@
 
 ## Data safety
 - There is no server database. Data lives on the device: SharedPreferences (Android) or browser storage per origin (PWA). The sandbox is a different origin, so it never sees production data.
+- `validate()` in `www/js/store.js` runs on every load, and a stored document that fails it loads as empty, so the next save wipes the user's data. When adding a field, check only its shape there, never cross-field rules that an edit can break (#75: extra-repayment dates are deliberately not checked against the loan's dates).
 - The release keystore is `~/keys/ghest-release.jks` (local only, never committed); signing values live in GitHub secrets.
 
 ## F-Droid
@@ -59,8 +60,12 @@
 - Listing: https://f-droid.org/packages/dev.margani.ghest/ (live since 1.0.8, 2026-10-14). Check a release: `sha256sum` of `https://f-droid.org/repo/dev.margani.ghest_<versionCode>.apk` must equal the GitHub release APK's.
 - Keep reviewer replies short.
 
+## Domain conventions
+- "Left" amounts include interest, as banks show them; principal and interest are shown as a breakdown (#73).
+- A commitment's own dates (start, next, final, payments) are shown in its own `calendar`. The Settings calendar is only the default for new commitments and global dates (#83).
+
 ## Open tasks
-- None.
+- None. Current state is in `HANDOFF.md`.
 
 ## Lessons
 - 2026-10-10 (#15): On WebViews older than 140, Capacitor pads the page away from the system bars, so the bars show the window background, which follows the Android night mode, not the page. And once the app starts in a forced theme, the WebView's `prefers-color-scheme` keeps that start-up value. Theme handling therefore goes through `ThemePlugin.java` (night mode set in `attachBaseContext`, device dark mode reported to JS). Test theme changes on the emulator (it has WebView 124) with a release (R8) build.
