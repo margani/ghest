@@ -2,25 +2,25 @@
 
 <!-- impeccable:product-schema 1 -->
 
-> Written without an owner interview (2026-11-01, the owner asked for it while away). Facts taken from the repository are stated plainly with their source; anything marked **(inferred, owner to confirm)** is a reading of the code and docs, not something the owner has said.
+> Written from the repository on 2026-11-01; the owner confirmed the inferred facts the same day.
 
 ## Platform
 
 web
 
-One web UI (`www/`) ships two ways: as a PWA and wrapped with Capacitor as an Android app. The Android build is a WebView around the same pages, so the design language is web, not Material. **(inferred, owner to confirm)**
+One web UI (`www/`) ships two ways: as a PWA and wrapped with Capacitor as an Android app. The Android build is a WebView around the same pages, so the design language is web, not Material.
 
 ## Users
 
 - People paying off several fixed commitments at once (bank loans, car finance, tuition, mahr, a phone on instalments) who want to know where they stand without a bank login. Source: README, store listing.
-- Primarily Persian speakers, many in Iran, who think in toman and Solar Hijri dates; English and Gregorian are first-class too. **(inferred, owner to confirm)**: Persian is listed first in the UI languages and the store listing has a `fa-IR` locale; toman is a built-in currency.
-- The typical moment: checking on a phone what is left, when the next payment falls, and when everything ends; less often, deciding where an extra lump sum should go. **(inferred, owner to confirm)**
+- Primarily Persian speakers, many in Iran, who think in toman and Solar Hijri dates; English and Gregorian are first-class too. Persian is listed first in the UI languages and the store listing has a `fa-IR` locale; toman is a built-in currency.
+- The typical moment: checking on a phone what is left, when the next payment falls, and when everything ends; less often, deciding where an extra lump sum should go.
 
 ## Product Purpose
 
 Show, for each fixed recurring payment, where you are in it, what is left (including interest, as banks show it), and when it ends; and across all of them, the monthly load, the total left, and the date everything is paid off. Source: README, `CLAUDE.md` domain conventions (#73).
 
-Success: the numbers match what the bank says closely enough to trust, and the answer is visible at a glance. **(inferred, owner to confirm)**
+Success: the numbers match what the bank says closely enough to trust, and the answer is visible at a glance.
 
 ## Positioning
 
@@ -46,7 +46,7 @@ Success: the numbers match what the bank says closely enough to trust, and the a
 
 - Name: "Ghest" in English, «قسط» in Persian. App ID `dev.margani.ghest`. Icon: `assets/icon.svg`. Source: repository.
 - Bundled font: Vazirmatn (`www/fonts/`), no remote fonts. Source: `www/`, README.
-- Voice: short, plain, everyday Persian in the UI (e.g. «این فایل پشتیبان قسط نیست یا خرابه.»). **(inferred, owner to confirm)**
+- Voice: short, plain, everyday Persian in the UI (e.g. «این فایل پشتیبان قسط نیست یا خرابه.»).
 
 ## Evidence on Hand
 
@@ -54,8 +54,6 @@ Success: the numbers match what the bank says closely enough to trust, and the a
 - No testimonials, user counts, reviews or press exist in the repository; none may be invented.
 
 ## Product Principles
-
-**(inferred, owner to confirm)**: drawn from the README and past issues, not stated by the owner.
 
 1. Private by construction: anything that needs a network, an account or a tracker is out.
 2. Numbers the user can check against their bank: amounts include interest, dates follow the commitment's own calendar.
@@ -66,4 +64,4 @@ Success: the numbers match what the bank says closely enough to trust, and the a
 ## Accessibility & Inclusion
 
 - RTL and LTR layouts, Persian and Latin digits, light and dark themes following the device or a manual choice. Source: README, `CLAUDE.md` (#15).
-- No formal accessibility standard has been set. **(inferred, owner to confirm)**
+- No formal accessibility standard has been set.
