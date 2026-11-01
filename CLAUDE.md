@@ -52,6 +52,7 @@
 ## Data safety
 - There is no server database. Data lives on the device: SharedPreferences (Android) or browser storage per origin (PWA). The sandbox is a different origin, so it never sees production data.
 - `validate()` in `www/js/store.js` runs on every load, and a stored document that fails it loads as empty, so the next save wipes the user's data. When adding a field, check only its shape there, never cross-field rules that an edit can break (#75: extra-repayment dates are deliberately not checked against the loan's dates).
+- Enum checks in `validate()` test own keys (`isKey`, i.e. `Object.hasOwn`), never `LANGS[x]`/`CALENDARS[x]`: a plain lookup also finds `constructor` and the like, and such a stored value stopped the app from starting (#92, 2026-11-01).
 - The release keystore is `~/keys/ghest-release.jks` (local only, never committed); signing values live in GitHub secrets.
 
 ## F-Droid
