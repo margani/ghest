@@ -10,3 +10,7 @@ android/keystore.properties
 *.keystore
 *.local.json
 .wrangler/
+
+# Impeccable: per-developer consent and detector cache
+.impeccable/config.local.json
+.impeccable/hook.cache.json

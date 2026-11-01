@@ -31,6 +31,12 @@ test('import rejects malformed backups', () => {
     d => { d.commitments[1].id = 'a'; },
     d => { d.commitments[1].payDay = 5; },
     d => { d.prefs.currency = 'pounds'; },
+    // #92: names inherited from Object.prototype are not languages or calendars.
+    d => { d.prefs.lang = 'constructor'; },
+    d => { d.prefs.lang = '__proto__'; },
+    d => { d.prefs.displayCalendar = 'toString'; },
+    d => { d.commitments[0].calendar = 'constructor'; },
+    d => { d.commitments[0].calendar = 'hasOwnProperty'; },
   ];
   for (const mutate of cases) {
     const d = valid();
