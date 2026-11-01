@@ -4,3 +4,11 @@
   Cache-Control: no-cache
 /manifest.webmanifest
   Content-Type: application/manifest+json
+# Everything the app loads is its own (no CDN, no remote fonts), so the policy can be strict. It limits
+# the damage of a missed esc() in the innerHTML renderer and stops other sites framing the app (#92).
+# style-src needs 'unsafe-inline' for the style="" attributes the renderer writes and webview-update.html.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer

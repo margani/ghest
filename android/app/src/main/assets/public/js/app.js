@@ -384,7 +384,7 @@ function renderLump() {
   const sel = $('lumpCurrency');
   const prev = sel.value;
   sel.hidden = curs.length < 2;
-  sel.innerHTML = curs.map(c => `<option value="${c}">${c === 'IRT' ? esc(t.toman) : c}</option>`).join('');
+  sel.innerHTML = curs.map(c => `<option value="${esc(c)}">${c === 'IRT' ? esc(t.toman) : esc(c)}</option>`).join('');
   sel.value = curs.includes(prev) ? prev : curs[0];
 
   const x = parseNumber($('lumpAmount').value);

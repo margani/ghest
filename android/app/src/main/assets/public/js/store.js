@@ -66,6 +66,9 @@ export function parseImport(text) {
 const isISO = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && isoFromDay(dayFromISO(s)) === s;
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const isCurrency = v => typeof v === 'string' && /^[A-Z]{3}$/.test(v);
+// Own keys only (#92): a plain lookup also finds 'constructor' and the like on Object.prototype,
+// and a backup holding one was accepted, then crashed every launch.
+const isKey = (o, k) => typeof k === 'string' && Object.hasOwn(o, k);
 
 function fail(msg) { throw new Error(`invalid backup: ${msg}`); }
 
@@ -73,7 +76,7 @@ function validate(doc) {
   if (!doc || doc.app !== 'ghest') fail('not a ghest file');
   if (doc.version !== VERSION) fail(`unsupported version ${doc.version}`);
   const p = doc.prefs || {};
-  if (!LANGS[p.lang] || !CALENDARS[p.displayCalendar] || !isCurrency(p.currency)) fail('prefs');
+  if (!isKey(LANGS, p.lang) || !isKey(CALENDARS, p.displayCalendar) || !isCurrency(p.currency)) fail('prefs');
   // Backups made before the theme setting have no `theme`; they follow the device.
   if (p.theme != null && !THEMES.includes(p.theme)) fail('prefs');
   if (!Array.isArray(doc.commitments)) fail('commitments');
@@ -86,7 +89,7 @@ function validate(doc) {
     if (typeof c.amount !== 'number' || !(c.amount > 0) || !isFinite(c.amount)) bad('amount');
     if (c.currency != null && !isCurrency(c.currency)) bad('currency');
     if (!FREQUENCIES.includes(c.frequency)) bad('frequency');
-    if (!CALENDARS[c.calendar]) bad('calendar');
+    if (!isKey(CALENDARS, c.calendar)) bad('calendar');
     const ok = {
       daily: () => c.payDay === null,
       weekly: () => isInt(c.payDay, 0, 6),
