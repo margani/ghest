@@ -1,0 +1,2 @@
+- A backup file with an unsupported language or calendar is now refused on import instead of stopping the app from starting.
+- Web version: stricter security headers.
