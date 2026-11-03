@@ -30,7 +30,6 @@ jobs:
           fi
       - run: npm run apk
       - run: ./scripts/check-apk.sh android/app/build/outputs/apk/debug/app-debug.apk
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ghest-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+      # No upload-artifact here: every run kept a 3.7 MB debug APK for 90 days,
+      # 299 MB of the account's 512 MB Actions storage (#103). Nothing used them.
+      # Release APKs come from release.yml.
